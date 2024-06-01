@@ -1,0 +1,227 @@
+[
+  {
+    "type": "content_line",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": true,
+      "types": [
+        {
+          "type": "inline_richtext",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "document",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "content_line",
+          "named": true
+        },
+        {
+          "type": "empty_line",
+          "named": true
+        },
+        {
+          "type": "node",
+          "named": true
+        },
+        {
+          "type": "version_comment",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "embed_type",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "STRING1",
+          "named": true
+        },
+        {
+          "type": "STRING2",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "empty_line",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "inline_embedding",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "inline_richtext",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "metadata_value",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "STRING1",
+          "named": true
+        },
+        {
+          "type": "STRING2",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "nih_whitespace",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "node",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "SYMBOL_EMPTY_NODE",
+          "named": true
+        },
+        {
+          "type": "content_line",
+          "named": true
+        },
+        {
+          "type": "empty_line",
+          "named": true
+        },
+        {
+          "type": "inline_embedding",
+          "named": true
+        },
+        {
+          "type": "node",
+          "named": true
+        },
+        {
+          "type": "node_embed_declaration",
+          "named": true
+        },
+        {
+          "type": "node_metadata_declaration",
+          "named": true
+        },
+        {
+          "type": "node_title_line",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "node_embed_declaration",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "embed_type",
+          "named": true
+        },
+        {
+          "type": "nih_whitespace",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "node_metadata_declaration",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "metadata_key",
+          "named": true
+        },
+        {
+          "type": "metadata_value",
+          "named": true
+        },
+        {
+          "type": "nih_whitespace",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "node_title_line",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "inline_richtext",
+          "named": true
+        },
+        {
+          "type": "nih_whitespace",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "version_comment",
+    "named": true,
+    "fields": {}
+  },
+  {
+    "type": "STRING1",
+    "named": true
+  },
+  {
+    "type": "STRING2",
+    "named": true
+  },
+  {
+    "type": "SYMBOL_EMPTY_NODE",
+    "named": true
+  },
+  {
+    "type": "metadata_key",
+    "named": true
+  }
+]

@@ -1,0 +1,27 @@
+==================
+Root node content w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+nothing else.
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (content_line
+        (inline_richtext))
+    (empty_line))
+
+==================
+Root node content w/ abrupt eof
+==================
+This is a simple cleancopy document with plain text in the root node and
+nothing else.
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (content_line
+        (inline_richtext)))

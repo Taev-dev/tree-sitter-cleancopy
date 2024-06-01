@@ -1,0 +1,230 @@
+==================
+Single toplevel node, immediate, title-1, no metadata
+==================
+> Node title
+    Normal content line
+
+---
+
+(document
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext))
+        (empty_line)))
+
+==================
+Single toplevel node, immediate, title-2, no metadata
+==================
+> Node title
+> with second line
+    Normal content line
+
+---
+
+(document
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext))
+        (empty_line)))
+
+==================
+Single toplevel node, delayed, title-1, no metadata
+==================
+Preamble content
+
+> Node title
+    Normal content line
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (empty_line)
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext))
+        (empty_line)))
+
+==================
+Single toplevel node, delayed, title-1, no metadata, no empty lines
+==================
+Preamble content
+> Node title
+    Normal content line
+Trailing content
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext)))
+    (content_line
+        (inline_richtext)))
+
+==================
+Single toplevel node, delayed, no title, no metadata
+==================
+Preamble content
+
+>
+    Normal content line
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (empty_line)
+    (node
+        (node_title_line)
+        (content_line
+            (inline_richtext))
+        (empty_line)))
+
+==================
+Single toplevel node, delayed, title-1, no metadata, empty
+==================
+Preamble content
+
+> Node title
+<
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (empty_line)
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (SYMBOL_EMPTY_NODE))
+    (empty_line))
+
+==================
+Single toplevel node, delayed, no title, no metadata, empty
+==================
+Preamble content
+
+>
+<
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (empty_line)
+    (node
+        (node_title_line)
+        (SYMBOL_EMPTY_NODE))
+    (empty_line))
+
+==================
+Nested nodes, immediate, title-1, no metadata, unwrapping exit
+==================
+> Outer node
+    Outer content
+
+    > Middle node
+        Middle content
+
+        > Inner node
+            Inner content
+
+        Middle trailing content
+
+    Outer trailing content
+
+Root trailing content
+
+---
+
+(document
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext))
+        (empty_line)
+        (node
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext))
+            (content_line
+                (inline_richtext))
+            (empty_line)
+            (node
+                (node_title_line
+                    (nih_whitespace)
+                    (inline_richtext))
+                (content_line
+                    (inline_richtext))
+                (empty_line))
+            (content_line
+                (inline_richtext))
+            (empty_line))
+        (content_line
+            (inline_richtext))
+        (empty_line))
+    (content_line
+        (inline_richtext))
+    (empty_line))
+
+==================
+Nested nodes, immediate, title-1, no metadata, immediate exit
+==================
+> Outer node
+    Outer content
+
+    > Middle node
+        Middle content
+
+        > Inner node
+            Inner content
+
+---
+
+(document
+    (node
+        (node_title_line
+            (nih_whitespace)
+            (inline_richtext))
+        (content_line
+            (inline_richtext))
+        (empty_line)
+        (node
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext))
+            (content_line
+                (inline_richtext))
+            (empty_line)
+            (node
+                (node_title_line
+                    (nih_whitespace)
+                    (inline_richtext))
+                (content_line
+                    (inline_richtext))
+                (empty_line)))))
+
