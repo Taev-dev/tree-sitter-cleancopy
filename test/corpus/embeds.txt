@@ -1,0 +1,138 @@
+==================
+Single toplevel node, immediate, title-1, no metadata, embed-1, no empty lines
+==================
+> Node title
+__embed__: 'some embed type'
+    Embedded content line 1
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1))))
+        (embedding_line
+            (inline_embedding)))
+    (empty_line))
+
+
+==================
+Single toplevel node, immediate, title-1, no metadata, embed-2, no empty lines
+==================
+> Node title
+__embed__: 'some embed type'
+    Embedded content line 1
+    Embedded content line 2
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1))))
+        (embedding_line
+            (inline_embedding))
+        (embedding_line
+            (inline_embedding)))
+    (empty_line))
+
+
+==================
+Single toplevel node, immediate, title-1, no metadata, embed-2, inter empty lines
+==================
+> Node title
+__embed__: 'some embed type'
+    Embedded content line 1
+
+    Embedded content line 2
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1))))
+        (embedding_line
+            (inline_embedding))
+        (empty_line)
+        (embedding_line
+            (inline_embedding)))
+    (empty_line))
+
+
+==================
+Single toplevel node, immediate, title-1, no metadata, embed-2+, no empty lines
+==================
+> Node title
+__embed__: 'some embed type'
+    Embedded content line 1
+        Embedded content line 2
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1))))
+        (embedding_line
+            (inline_embedding))
+        (embedding_line
+            (inline_embedding)))
+    (empty_line))
+
+
+==================
+Single toplevel node, immediate, title-1, no metadata, embed-0, no empty lines
+==================
+> Node title
+__embed__: 'some embed type'
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1))))
+        (SYMBOL_EMPTY_NODE))
+    (empty_line))

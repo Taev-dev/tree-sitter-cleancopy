@@ -11,16 +11,18 @@ module.exports = grammar({
     // assertion nor zero-width matches, we cannot include empty line here
     extras: ($) => ['\r'],
 
-    conflicts: $ => [
-        [$._pending_regular_node, $._pending_embed_node]],
+    // I can't, no matter how hard I try, get these conflicts to resolve within
+    // the grammar. I've even tried grammars I'm 99% sure are conflict-free.
+    // It just doesn't work. But for whatever fucking reason, this does the
+    // trick.
+    conflicts: ($) => [[$.node_title], [$.node_metadata]],
 
     rules: {
         document: $ => seq(
             optional($.version_comment),
-            // Note that a completely empty file will still emit an empty line
-            // token, so this counts as repeat1
-            prec.left(repeat1($._node_segment)),
-            $._eod_sentinel),
+            repeat($.empty_line),
+            prec.left($._node_segments),
+            $._ext_eof),
         // Sometimes we have situations where some optional stuff results in
         // other nih whitespace being next to the EoL. One example is if you
         // have a node title line with whitespace but no title. In this case,
@@ -33,23 +35,46 @@ module.exports = grammar({
 
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
-        _node_segment: $ => choice(
-            $.empty_line,
-            $.content_line,
-            $.node),
+        _node_segments: $ => seq(
+            choice($.content_line, $.node),
+            repeat(choice($.empty_line, $.content_line, $.node))),
 
-        content_line: $ => seq(
-            $._ext_node_continue, $.inline_richtext, $._eol),
+        _embedding_segments: $ => seq(
+            $.embedding_line,
+            repeat(choice($.embedding_line, $.empty_line))),
+
+        node: $ => seq(
+            field('title', $.node_title),
+            field('metadata', optional($.node_metadata)),
+            // This is messy, and forces us to do out-of-order zero-width
+            // tokens to flag embedded nodes, but... I tried a lot of other
+            // stuff and couldn't get it to work.
+            choice(
+                seq(
+                    $._ext_node_begin,
+                    choice(
+                        field('embed', seq(
+                            $._ext_flag_embed, $._embedding_segments)),
+                        field('content', $._node_segments)),
+                    $._ext_node_end),
+                seq(
+                    $._ext_node_continue,
+                    $._empty_node_sentinel,
+                    $.SYMBOL_EMPTY_NODE,
+                    $._eol))),
+
+        node_title: $ => seq(
+            $.node_title_line,
+            repeat(choice($.empty_line, $.node_title_line))),
+
+        // Word to the wise: don't try and enforce only-1-ID-line here.
+        // You'll regret it! Do it when converting the CST -> AST.
+        node_metadata: $ => seq(
+            $.node_metadata_declaration_line,
+            repeat(choice($.empty_line, $.node_metadata_declaration_line))),
 
         // Note that the node title marker is ambiguous with the node line
         // content
-        node: $ => seq(
-            $.node_title_line,
-            repeat(choice(
-                prec(4, $.empty_line),
-                $.node_title_line)),
-            choice($._pending_embed_node, $._pending_regular_node)),
-
         node_title_line: $ => seq(
             $._ext_node_continue,
             // THIS IS REQUIRED! Tree sitter expects two terminals to be
@@ -62,6 +87,21 @@ module.exports = grammar({
             optional($.inline_richtext),
             $._eol),
 
+        node_metadata_declaration_line: $ => seq(
+            $._ext_node_continue,
+            $._node_metadata_sentinel,
+            $.metadata_key,
+            $._SYMBOL_METADATA_ASSIGNMENT,
+            repeat($.nih_whitespace),
+            $.metadata_value,
+            $._eol),
+
+        content_line: $ => seq(
+            $._ext_node_continue, $.inline_richtext, $._eol),
+
+        embedding_line: $ => seq(
+            $._ext_node_continue, $.inline_embedding, $._eol),
+
         // Note: this gets used in both content lines and in titles, however,
         // it **does not** include lists!
         // TODO: this should be a non-terminal, and support all of the
@@ -70,66 +110,6 @@ module.exports = grammar({
         inline_embedding: $ => /[^\n]+/,
 
 
-        // ... I'm not entirely sure if these two prec(1, ...) and prec(2, ...)
-        // are correct?
-        _pending_regular_node: $ => seq(
-            // Word to the wise: don't try and enforce only-1-ID-line here.
-            // You'll regret it! Do it when converting the CST -> AST.
-            repeat(choice(
-                $.node_metadata_declaration,
-                prec(3, $.empty_line))),
-            choice(
-                seq(
-                    $._ext_node_begin,
-                    repeat1($._node_segment),
-                    $._ext_node_end),
-                seq(
-                    $._ext_node_continue,
-                    $.SYMBOL_EMPTY_NODE,
-                    $._eol))),
-        // Higher precedence because otherwise the embed could be matched in
-        // the regular
-        _pending_embed_node: $ => seq(
-            // Word to the wise: don't try and enforce only-1-ID-line here.
-            // You'll regret it! Do it when converting the CST -> AST.
-            repeat(choice(
-                $.node_metadata_declaration,
-                prec(2, $.empty_line))),
-            prec(3, $.node_embed_declaration),
-            repeat(choice(
-                $.node_metadata_declaration,
-                prec(3, $.empty_line))),
-            choice(
-                seq(
-                    $._ext_node_begin,
-                    repeat1(seq(
-                        $._ext_node_continue,
-                        $.inline_embedding,
-                        $._eol)),
-                    $._ext_node_end),
-                seq(
-                    $._ext_node_continue,
-                    $.SYMBOL_EMPTY_NODE,
-                    $._eol))),
-
-        node_embed_declaration: $ => seq(
-            $._ext_node_continue,
-            $._LITERAL_NODE_EMBED_DECLARATION,
-            $._SYMBOL_METADATA_ASSIGNMENT,
-            repeat($.nih_whitespace),
-            $.embed_type,
-            $._eol),
-        node_metadata_declaration: $ => seq(
-            $._ext_node_continue,
-            $.metadata_key,
-            $._SYMBOL_METADATA_ASSIGNMENT,
-            repeat($.nih_whitespace),
-            $.metadata_value,
-            $._eol),
-
-
-
-        embed_type: $ => $._string,
         // This looks way more complicated than it is; we want to support
         // unicode letters (including letters with marks on them) and the
         // underscore as the first character, and then add in the -, ., and
@@ -183,14 +163,17 @@ module.exports = grammar({
 
     externals: $ => [
         $._error_sentinel,
-        $._eod_sentinel,
+        $._node_metadata_sentinel,
+        $._empty_node_sentinel,
+        $._ext_flag_embed,
+        $._ext_flag_node_def,
         $._ext_eol,
         $._ext_empty_line,
         $._ext_nih_whitespace,
         $._ext_node_continue,
-        $._ext_flag_node_def,
         $._ext_node_begin,
         $._ext_node_end,
+        $._ext_eof,
         $.autoclose_warning
     ],
 });
