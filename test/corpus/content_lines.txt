@@ -1,5 +1,5 @@
 ==================
-Root node content w/ trailing emptyline
+Root node content w/ trailing (true) emptyline
 ==================
 This is a simple cleancopy document with plain text in the root node and
 nothing else.
@@ -12,6 +12,22 @@ nothing else.
     (content_line
         (inline_richtext))
     (empty_line))
+
+==================
+Root node content w/ trailing (visibly-empty only) emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+nothing else. Like above, but the empty line at the end has whitespace in it.
+    
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (content_line
+        (inline_richtext))
+    (empty_line))
+
 
 ==================
 Root node content w/ abrupt eof

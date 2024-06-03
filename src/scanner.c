@@ -1,6 +1,7 @@
 #include "tree_sitter/parser.h"
 #include "tree_sitter/alloc.h"
 #include "tree_sitter/array.h"
+#include <assert.h>
 #include <stdio.h>
 
 // The member order must match the ``externals`` array in ``grammar.js`` but
@@ -126,7 +127,7 @@ static bool is_indentation_or_eol(
 
 // IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
 typedef struct {
-    uint8_t node_depth;
+    uint8_t node_level;
 } Node;
 // SUPER IMPORTANT: if you add anything here with a variable length, you'll
 // need to make significant changes to de/serialization! We currently rely
@@ -137,6 +138,12 @@ typedef struct {
 // node immediately before serializing it)
 
 
+typedef struct {
+    TokenType token;
+    size_t advance_count;
+} PendingToken;
+
+
 // IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
 typedef struct {
     // Together, these determine how indentation is determined for a file. It
@@ -145,27 +152,32 @@ typedef struct {
     int32_t indentation_char;
     uint8_t indentation_char_repetitions;
 
-    bool any_token_emitted;
-    bool eof_eol_emitted;
-    bool at_eof;
-    // We use this to denote that we've emitted all possible zero-length tokens
-    // at the end of the file.
+    // The token backlog is FIFO, but the array we're using is a stack.
+    // Therefore, when we have a token backlog, instead of creating a new copy
+    // of it every time we need to pop from the LEFT of the array, we simply
+    // advance this counter. Once we've processed the whole backlog, we can
+    // set this to zero and clear the backlog.
+    uint8_t token_backlog_index;
+    // We use this to indicate to the EoF handler that we detected an empty
+    // line before this. We can't rely on the lexer to tell us this is the
+    // case, because it always reports a column of 0 at EoF.
+    bool eof_emptyline_detected;
+    // We use this to denote that we've already processed the EoF and added
+    // any trailing zero-length tokens to the backlog. If this is true, and
+    // the token backlog is consumed, then parsing is finished.
     bool post_eof;
 
-    TokenType previous_token;
-
     Array(Node *) * node_stack;
+    Array(PendingToken *) * token_backlog;
 } Scanner;
 
 
 size_t _SCANNER_FIELD_LENGTHS[] = {
     sizeof(int32_t),
     sizeof(uint8_t),
+    sizeof(uint8_t),
     sizeof(bool),
-    sizeof(bool),
-    sizeof(bool),
-    sizeof(bool),
-    sizeof(TokenType)};
+    sizeof(bool)};
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -173,20 +185,22 @@ size_t _SCANNER_FIELD_LENGTHS[] = {
 //////////////////////////////////////////////////////////////////////////////
 void *tree_sitter_cleancopy_external_scanner_create(
         void
-) { 
+) {
+    // printf("##### PARSE START #####\n\n");
     Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
 
     // This is how you create an empty array
     // hmm, this emits a compiler warning because the Array(Node *) is used as
     // a throwaway type to calculate a size.
     scanner->node_stack = ts_malloc(sizeof(Array(Node *)));
+    scanner->token_backlog = ts_malloc(sizeof(Array(PendingToken *)));
     scanner->indentation_char = 0;
     scanner->indentation_char_repetitions = 0;
-    scanner->any_token_emitted = false;
-    scanner->eof_eol_emitted = false;
-    scanner->at_eof = false;
+    scanner->token_backlog_index = 0;
+    scanner->eof_emptyline_detected = false;
     scanner->post_eof = false;
     array_init(scanner->node_stack);
+    array_init(scanner->token_backlog);
 
     return scanner;
 }
@@ -197,19 +211,22 @@ void tree_sitter_cleancopy_external_scanner_destroy(
 ) {
     Scanner *scanner = (Scanner *)payload;
 
-    // I haven't shown the allocation of the nodes yet,
-    // but keep in mind that `array_delete` does not deallocate any memory
-    // you store in the array itself.
+    // We need to free the nodes themselves before clearing the array, because
+    // it doesn't handle this.
     for (size_t i = 0; i < scanner->node_stack->size; ++i) {
-    // I use `array_get` even though you can index the contents directly.
+        printf("!!! WARNING: node_stack had nodes on destruction!\n");
         ts_free(array_get(scanner->node_stack, i));
     }
-
-    // The array is a growable one, `array_delete` ensures that the
-    // memory is deleted.
     array_delete(scanner->node_stack);
+    // Same goes for the token backlog.
+    for (size_t i = 0; i < scanner->token_backlog->size; ++i) {
+        printf("!!! WARNING: token backlog not empty on destruction!\n");
+        ts_free(array_get(scanner->token_backlog, i));
+    }
+    array_delete(scanner->token_backlog);
 
     ts_free(scanner);
+    // printf("\n\n##### PARSE END #####\n");
 }
 
 
@@ -218,12 +235,32 @@ static void push_node(
         automatically.
         */
         Scanner *scanner,
-        uint8_t node_depth
+        uint8_t node_level
 ) {
     Node *node = ts_malloc(sizeof(Node));
-    node->node_depth = node_depth;
+    node->node_level = node_level;
 
     array_push(scanner->node_stack, node);
+}
+
+
+static void reset_backlog(
+        /* One would think you could simply call
+        array_clear(scanner->token_backlog) for this, but this appears
+        to somehow break the scanner_destroy cleanup method (when we try
+        to call ``array_delete``.) No idea why, but... hey, where there's
+        a will, there's a workaround. I think this might be cleaner anyways.
+        */
+        Scanner *scanner
+) {
+    scanner->token_backlog_index = 0;
+
+    // We can't do this one-at-a-time as we process, because it would
+    // get resurrected on the next deserialization call. We have to
+    // do it at the same time we clear the array.
+    while (scanner->token_backlog->size > 0) {
+        ts_free(array_pop(scanner->token_backlog));
+    }
 }
 
 
@@ -239,11 +276,34 @@ static void pop_and_free_node(
 }
 
 
+static void schedule_token(
+        /* Frequently, consuming some character(s) will result in
+        multiple tokens, each of which may or may not be zero-length.
+        Tree-sitter, however, only supports returning a single token at
+        a time. Therefore, if you find yourself needing to return
+        multiple tokens, call this, and the scanner will automatically
+        handle it the next time it gets called.
+
+        **Note that you still need to emit the first token, though!**
+        */
+        Scanner *scanner,
+        TokenType token,
+        size_t advance_count
+) {
+    PendingToken *pending_token = ts_malloc(sizeof(PendingToken));
+    pending_token->token = token;
+    pending_token->advance_count = advance_count;
+    array_push(scanner->token_backlog, pending_token);
+}
+
+
 //////////////////////////////////////////////////////////////////////////////
 // SCANNING
 //////////////////////////////////////////////////////////////////////////////
 
 
+// TODO: this should be replaced by a general-purpose ParseState that is
+// used directly by the scanner!
 static void emit_token(
         /* Helper for all the bookkeeping we need to do any time we
         emit a token. **Note that the caller is still responsible for
@@ -253,8 +313,6 @@ static void emit_token(
         Scanner *scanner,
         TokenType token
 ) {
-    scanner->any_token_emitted = true;
-    scanner->previous_token = token;
     lexer->result_symbol = token;
 }
 
@@ -293,14 +351,14 @@ static bool advance_to_maybe_node_end(
     // a panic!
     if (scanner->node_stack->size == 0) { return false; }
     
-    uint8_t current_node_depth = (
-        ((Node *)*array_back(scanner->node_stack))->node_depth);
-    if (current_node_depth == 0) { return false; }
+    uint8_t current_node_level = (
+        ((Node *)*array_back(scanner->node_stack))->node_level);
+    if (current_node_level == 0) { return false; }
 
     // Keep in mind that we might be dedenting multiple levels, so this might
     // be less than this
     uint16_t max_indentation_char_count = (
-        scanner->indentation_char_repetitions * (current_node_depth - 1));
+        scanner->indentation_char_repetitions * (current_node_level - 1));
     uint16_t indentation_chars_found = parse_state->indentation_chars_found;
 
     // The general strategy here is to keep advancing until we either hit the
@@ -364,13 +422,16 @@ static bool advance_to_maybe_node_continue(
         || scanner->node_stack->size == 0
         // Case 3: we somehow got in a situation where document has a root
         // node, but its depth is 0. This would imply changes to grammar.js
-        || ((Node *)*array_back(scanner->node_stack))->node_depth == 0
+        || ((Node *)*array_back(scanner->node_stack))->node_level == 0
     ) {
         // We want to make sure that the next character **is NOT** indentation;
         // otherwise, it's not a valid node continue. That will either be a
         // node_begin or an error state; either way, we don't want to mark a
         // preliminary token. But assuming that's not the case, we can just
         // continue on.
+        // If the next "character" is an EoF, then technically this is
+        // redundant with the emptyline handling, but we can be defensive and
+        // also not set the preliminary token in that case.
         if (
             !lexer->eof(lexer)
             && !is_indentation_or_eol(lexer->lookahead)
@@ -386,11 +447,11 @@ static bool advance_to_maybe_node_continue(
     // because defining it is done within parse_node_begin
     } else {
         uint16_t indentation_chars_found = parse_state->indentation_chars_found;
-        uint8_t previous_node_depth = (
-            (Node *)*array_back(scanner->node_stack))->node_depth;
+        uint8_t previous_node_level = (
+            (Node *)*array_back(scanner->node_stack))->node_level;
 
         uint16_t max_indentation_char_count = (
-            previous_node_depth * scanner->indentation_char_repetitions);
+            previous_node_level * scanner->indentation_char_repetitions);
 
         // TODO: refactor into something reusable!
         while (
@@ -417,7 +478,7 @@ static bool advance_to_maybe_node_continue(
             || lexer->lookahead == scanner->indentation_char
         ) { return false; }
 
-        parse_state->preliminary_indentation_depth = previous_node_depth;
+        parse_state->preliminary_indentation_depth = previous_node_level;
         parse_state->preliminary_token_found = true;
         parse_state->preliminary_token = NODE_CONTINUE;
         return true;
@@ -470,17 +531,17 @@ static bool advance_to_maybe_node_begin(
 ) {
     if (_ensure_indent_info(scanner, parse_state->lookahead_at_line_start)) {
 
-        uint8_t previous_node_depth;
+        uint8_t previous_node_level;
         if (scanner->node_stack->size > 0) {
-            previous_node_depth = (
-                ((Node *)*array_back(scanner->node_stack))->node_depth);
+            previous_node_level = (
+                ((Node *)*array_back(scanner->node_stack))->node_level);
         } else {
-            previous_node_depth = 0;
+            previous_node_level = 0;
         }
 
         uint16_t indentation_chars_found = parse_state->indentation_chars_found;
         uint16_t max_indentation_char_count = (
-            (previous_node_depth + 1) * scanner->indentation_char_repetitions);
+            (previous_node_level + 1) * scanner->indentation_char_repetitions);
 
         // TODO: refactor into something reusable!
         while (
@@ -507,7 +568,7 @@ static bool advance_to_maybe_node_begin(
             || lexer->lookahead == scanner->indentation_char
         ) { return false; }
 
-        parse_state->preliminary_indentation_depth = previous_node_depth + 1;
+        parse_state->preliminary_indentation_depth = previous_node_level + 1;
         parse_state->preliminary_token_found = true;
         parse_state->preliminary_token = NODE_BEGIN;
         return true;
@@ -544,18 +605,14 @@ static bool check_for_empty_line(
     }
 
     // Status check: we started at the beginning of the line and advanced
-    // through either the EoF or until we found the first character that
-    // wasn't horizontal whitespace. But we still need to be careful, so that
-    // we don't get into an infinite loop of empty lines at the EoF.
-
-    if (lexer->eof(lexer)) {
-        return true;
-    }
-
-    // Note that we DON'T want to consume the newline. This makes the rules
-    // more consistent, which... I think anyways... might help somewhat with
-    // stability.
-    if (lexer->lookahead == NEWLINE) {
+    // through ONLY whitespace characters either until we reached the EoF
+    // or until we found the first character that wasn't horizontal whitespace.
+    // Therefore, if the next character is a newline (or EoF), then we know
+    // the whole line was empty, and we should preempt all of the rest of the
+    // start-of-line whitespace processing.
+    // Note that we don't want to consume a newline; that's handled within the
+    // EoL parser (or injected by the EoF parser as a zero-width token).
+    if (lexer->lookahead == NEWLINE || lexer->eof(lexer)) {
         return true;
     }
 
@@ -578,10 +635,8 @@ static bool parse_start_of_line(
         only mark the end of the consumed token at the current position
         of the lexer -- we can't rewind that, either!
 
-        Note: this is extremely fragile. If you mess this up even a little
-        bit, it can very quickly destroy the entire parse tree and/or result
-        in infinite loops, especially at EoF -- particularly if you have a
-        node_begin without a matching node_end.
+        Note that EoF node closing is handled within the dedicated EoF
+        parser, ie, ^^NOT here.^^
         */
         TSLexer *lexer,
         Scanner *scanner,
@@ -592,23 +647,8 @@ static bool parse_start_of_line(
     // WRT the grammar, but the interplay between the different moving parts
     // can be a little hard to reason about
     if (lexer->get_column(lexer) != 0) { return false; }
-    // This is less obvious: even empty lines require an EoL at their end.
-    // So if the previous token was an empty line, then still need to emit the
-    // EoL for it.
-    // Note that if the line has whitespace, it'll get caught by the above,
-    // but if it's truly a blank line, we'll still be at column zero.
-    // Also note that continuations stacking on top of continuations would be
-    // doubly errorful (no EoL), so we can abort those here, too
-    if (
-        scanner->any_token_emitted
-        // Note: NOT TRUE for node_begin and node_end!
-        && (
-            scanner->previous_token == EMPTY_LINE
-            || scanner->previous_token == NODE_CONTINUE
-        )
-    ) { return false; }
+    if (lexer->eof(lexer)){ return false; }
 
-    printf("... sol\n");
     _SolParseState *parse_state = ts_malloc(sizeof(_SolParseState));
     parse_state->preliminary_token_found = false;
     parse_state->preliminary_indentation_depth = 0;
@@ -619,23 +659,21 @@ static bool parse_start_of_line(
     // NOTE: order matters here! We need to go in order from least to most
     // indentation.
     if (valid_symbols[NODE_END]) {
-        printf("... node end\n");
         advance_to_maybe_node_end(lexer, scanner, parse_state);
     }
     if (valid_symbols[NODE_CONTINUE]) {
-        printf("... node cont\n");
         advance_to_maybe_node_continue(lexer, scanner, parse_state);
     }
     if (valid_symbols[NODE_BEGIN]) {
-        printf("... node beg\n");
         advance_to_maybe_node_begin(lexer, scanner, parse_state);
     }
 
-    // Note that indentation isn't the same as horizontal whitespace (based
-    // on our grammar), so we need to preemptively mark_end if we found
-    // a preliminary NODE_CONTINUE so that we keep its position in case of
-    // non-indentation whitespace that doesn't last until the end of the
-    // line
+    // Note that, based on our grammar, indentation (used to find
+    // node_continue) isn't the same as horizontal whitespace (used to find
+    // empty lines), so we need to call mark_end BEFORE checking for an empty
+    // line if we found a preliminary NODE_CONTINUE, so that we keep its
+    // position in case of non-indentation whitespace that doesn't last until
+    // the end of the line.
     // Important: this depends upon node_continue checking for
     // whitespace ahead of the last lookahead character. Otherwise,
     // you could accidentally have consumed more whitespace during
@@ -647,25 +685,18 @@ static bool parse_start_of_line(
         lexer->mark_end(lexer);
     }
 
-    // !!!!! IMPORTANT NOTE FOR THE FOLLOWING !!!!!
-    // If the main scanner function already marked us as at the EoF, that
-    // means we're on our second pass "consuming" the EoF. At this point, the
-    // only remaining tokens we can emit are code_ends. **Anything else will
-    // probably cause an infinite loop.**
-
     // We may or may not have found a preliminary token, but we still need to
     // check to see if the whole line is empty, since this could have more
     // (or less!) whitespace than any of the above.
     if (
-        !scanner->eof_eol_emitted
-        && valid_symbols[EMPTY_LINE]
+        valid_symbols[EMPTY_LINE]
         && check_for_empty_line(lexer, scanner, parse_state)
     ){
-        printf("... empty line\n");
-        lexer->mark_end(lexer);
         // Early return here, to override the preliminary token found. Also
         // be sure to mark the end, so that we advance until the start of the
-        // next line, and don't get stuck in an infinite loop.
+        // next line, and don't get stuck in an infinite loop. DO NOT schedule
+        // the newline here, even if at EoF -- let the EoF handler do that!
+        lexer->mark_end(lexer);
         emit_token(lexer, scanner, EMPTY_LINE);
         ts_free(parse_state);
         return true;
@@ -677,41 +708,78 @@ static bool parse_start_of_line(
         // We need to be really careful that these are ALWAYS emitted at the
         // EoF, regardless of what happens, so we handle these separately.
         if (parse_state->preliminary_token == NODE_END) {
-            // Note: since treesitter only supports one token at a time, we're
-            // just going to pop the current node off the stack, set the found
-            // token, and re-parse the exact same indentation repeatedly until
-            // we've popped the correct number of nodes. This is maybe a little
-            // wasteful, but it should be very robust.
-            pop_and_free_node(scanner);
-
-            emit_token(lexer, scanner, parse_state->preliminary_token);
-            ts_free(parse_state);
-            return true;
+            assert(scanner->node_stack->size > 0);
+            Node *node_to_end = array_pop(scanner->node_stack);
+            // We'll need a helper at some point to close out any misc richtext
+            // formatting that might be open still; that will go right here
+            ts_free(node_to_end);
 
         // For all other zero-width tokens, however, we need to make sure that
         // we haven't already processed the EoF, lest we get stuck in an
         // infinite loop of mismatched expectations between scanner and parser
-        } else if (
-            !scanner->eof_eol_emitted
-        ){
-            if (parse_state->preliminary_token == NODE_BEGIN) {
-                push_node(scanner, parse_state->preliminary_indentation_depth);
-            }
-
-            // Note: we did mark_end for the NODE_CONTINUE already!
-            emit_token(lexer, scanner, parse_state->preliminary_token);
-            ts_free(parse_state);
-            return true;
+        } else if (parse_state->preliminary_token == NODE_BEGIN) {
+            push_node(scanner, parse_state->preliminary_indentation_depth);
         }
 
-        printf("... ptf, ret false\n");
+        // Note: we called mark_end for the NODE_CONTINUE already!
+        emit_token(lexer, scanner, parse_state->preliminary_token);
         ts_free(parse_state);
-        return false;
+        return true;
     }
 
-    printf("... end, ret false\n");
     ts_free(parse_state);
     return false;
+}
+
+
+static bool parse_eof(
+        /* Treesitter doesn't give us a formal EoF token, but we may
+        need to do a bunch of zero-width tokens here. Therefore, we call
+        this as soon as we detect an EoF, and handle everything here.
+
+        Originally, this logic was spread out between the other parsers,
+        but that got **very** unwieldy and bug-prone. So instead, I've
+        centralized it here, so that it's clear what's going on. It
+        doesn't feel particularly DRY, but it's ^^just different enough^^
+        that is was causing a ton of headaches trying to implement it
+        elsewhere.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        const bool *valid_symbols
+) {
+    // There are 3 ways an EoF can be spelled:
+    // ++  abruptly, at the end of a line with content
+    // ++  the traditional way, with an empty line
+    // ++  the "it looks traditional but it isn't" way, with one last line
+    //     full just of whitespace
+    // The first case doesn't need an empty line, just an EoL.
+    // The second case needs an empty line + EoL. This is detected by the
+    // EoL handler ^^for the previous EoL^^, and the empty line token is
+    // scheduled there. So in that case, we just need an EoL.
+    // The third case gets the empty line from the start-of-line handler, and
+    // then a newline from here.
+    // Note: lexer->get_column **always returns 0 at EoF!**
+    emit_token(lexer, scanner, EOL);
+
+    // If you decide you want to make empty lines part of the parent block
+    // instead of the child block, you can simply slide this before the above
+    // EoF empty-and/or-EoL block
+    if (scanner->node_stack->size > 0) {
+        uint8_t current_indentation_level = (
+            ((Node *)*array_back(scanner->node_stack))->node_level);
+
+        while (current_indentation_level > 0) {
+            Node *node_to_end = array_pop(scanner->node_stack);
+            assert(node_to_end->node_level == current_indentation_level);
+            schedule_token(scanner, NODE_END, 0);
+            ts_free(node_to_end);
+            current_indentation_level -= 1;
+        }
+    }
+
+    assert(scanner->node_stack->size == 0);
+    return true;
 }
 
 
@@ -719,8 +787,8 @@ static bool parse_eol(
         /* We need to parse the EoL externally for two reasons: first of
         all, the interplay with empty lines -- which might be a
         zero-length token between two newlines -- is very tricky.
-        Second, we need to be sure to always emit a newline at the end
-        of the file, which the normal treesitter lexer can't do.
+        Second, we need to detect in advance if an EoF immediately follows
+        an EoL, indicating a trailing empty line.
         */
         TSLexer *lexer,
         Scanner *scanner,
@@ -729,23 +797,24 @@ static bool parse_eol(
     if (lexer->lookahead == NEWLINE) {
         lexer->advance(lexer, false);
         emit_token(lexer, scanner, EOL);
-        printf("...normal eol\n");
-        return true;
-    }
-    // As mentioned in the docstring, the point here is that we ALWAYS need
-    // to emit exactly one EoL at the EoF.
-    if (
-        lexer->eof(lexer)
-        && !scanner->eof_eol_emitted
-    ) {
-        emit_token(lexer, scanner, EOL);
-        scanner->eof_eol_emitted = true;
-        printf("...eof eol\n");
+
+        // We want to let the EoF handler, and ^^only^^ the EoF handler,
+        // deal with all the EoF tokens, because it makes the code much
+        // cleaner. However:
+        // ++  it can't read backwards
+        // ++  the lexer always returns a column of 0 at EoF
+        // ++  start-of-line handling gets skipped at EoF
+        // Therefore, the EoF handler has no way to know if it immediately
+        // follows a newline, and therefore no idea if it needs to emit an
+        // empty line or not. So we do that here instead, and let the EoF
+        // handler ^^just^^ do the EoL.
+        if (lexer->eof(lexer)) {
+            schedule_token(scanner, EMPTY_LINE, 0);
+        }
+
         return true;
     }
 
-    printf("...parse eol about to ret false\n");
-    printf("...eol emitted? %d\n", scanner->eof_eol_emitted);
     return false;
 }
 
@@ -798,25 +867,17 @@ static bool parse_nih_whitespace(
 
 
 bool tree_sitter_cleancopy_external_scanner_scan(
-        /* TODO: we need to fix the EOF handling here, because it currently,
-        I'm pretty sure, will result in infinite loops if you need to pop off
-        multiple nodes at the end of the file. The reason is that you have
-        exactly two passes through the end, but you can only emit one token
-        at a time, so you need to repeatedly pass through here an indeterminate
-        number of times before you **actually** hit the eof.
+        /* TODO: refactor the backlog handling into a separate helper function
+        that returns bool to determine if parsing should continue
 
-        Additionally, the EoF sentinel doesn't appear to do anything, so...
-        maybe consider removing it? or emit it earlier to force an error
-        condition or something? you might be able to tie that into the above,
-        so that if you're done with any node_ends that might have come up at
-        eof, but you still see nodes, then emit an early eof to force an error
-        condition?
+        TODO: I think we want to create a separate, special-case handler for
+        the EoF. There's just too much special logic in the other handlers; too
+        much potential there for error
         */
         void *payload,
         TSLexer *lexer,
         const bool *valid_symbols
 ) {
-    printf("!!! in scanner\n");
     Scanner *scanner = (Scanner *)payload;
     // As per treesitter docs, the first thing that happens when treesitter
     // encounters a parse error is to call the external scanner with all tokens
@@ -827,63 +888,76 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         printf("!!! ERROR SENTINEL!\n");
         return false; }
 
-    // This is purely defensive against infinite loops, though it doesn't seem
-    // to really help for many of them... ^^le sigh^^
+    uint8_t token_backlog_size = scanner->token_backlog->size;
+    if (token_backlog_size > 0) {
+        uint8_t token_backlog_index = scanner->token_backlog_index;
+        // We've worked through the whole backlog; time to reset it
+        // Note: >= is purely defensive here; should only ever be ==
+        if (token_backlog_index >= token_backlog_size) {
+            // printf("!!! token backlog processed; clearing\n");
+            reset_backlog(scanner);
+
+            // NOTE NO RETURN HERE! We want to continue processing as usual.
+
+        } else {
+            PendingToken *pending_token = *array_get(
+                scanner->token_backlog, token_backlog_index);
+            // printf(
+            //     "!!! processing token backlog %d: %d\n",
+            //     token_backlog_index, pending_token->token);
+            scanner->token_backlog_index += 1;
+
+            for (size_t i = 0; i < pending_token->advance_count; ++i) {
+                lexer->advance(lexer, false);
+            }
+            lexer->mark_end(lexer);
+            lexer->result_symbol = pending_token->token;
+
+            // Note that we can't free the memory for each individual pending
+            // token here, since it would just get re-allocated on the next
+            // deserialization, because we're not mutating the actual array
+            // until the whole thing is consumed.
+
+            return true;
+        }
+    }
+
+    // Once we hit this, we've scheduled **and emitted** all of the meaningful
+    // tokens. The only thing we have left to do is emit the _EOD sentinel to
+    // conclude the document.
+    // Note: post_eof is set in the FOLLOWING block, when we first encounter
+    // the eof.
     if (scanner->post_eof) {
-        printf("!!! after post eof!!!\n");
-        return false; }
-
-    // This needs to be first, but otherwise, order shouldn't (I don't think?)
-    // matter.
-    if (
-        includes_sol_symbols(valid_symbols)
-        && parse_start_of_line(lexer, scanner, valid_symbols)
-    ) { return true; }
-
-    // Only three token types are permissible at the EoF:
-    // ++  a maximum of one empty-line token
-    // ++  a maximum of one EoL
-    // ++  all remaining node-end tokens
-    // Therefore, we set at_eof AFTER handling start-of-line symbols and EoL,
-    // allowing any EoF empty-line token (and the **mandatory** EoL) to be
-    // emitted exactly once. Then, the internal parse_start_of_line logic will
-    // prevent it from being issued again, based on the ``at_eof`` flag.
-
-    if (
-        valid_symbols[EOL]
-        && parse_eol(lexer, scanner, valid_symbols)
-    ) { return true; }
+        // printf(">>> found post_eof\n");
+        emit_token(lexer, scanner, _EOD_SENTINEL);
+        return true;
 
     // Just because we're at the EoF, doesn't mean we're out of tokens.
     // We still have a number of possible zero-width tokens. However, we need
     // to be REALLY careful here, or we'll end up in an infinite loop at the
-    // end of parsing.
-    if (lexer->eof(lexer)) {
-        // The first time we hit the EoF, we won't have marked it yet, because
-        // we'll just have issued the EoF EoL.
-        // Note that we can't fold this into the parse_eol check, because
-        // that advances the parse cursor. That will cause us to always skip
-        // an EoF empty line, which isn't what we want.
-        if (!scanner->at_eof){
-            printf("!!! at eof, setting at_eof!!!\n");
-            scanner->at_eof = true;
+    // end of parsing. This is our last chance to schedule any remaining
+    // tokens; we can't come back to this block without having an infinite
+    // loop at the EoF.
+    } else if (lexer->eof(lexer)) {
+        scanner->post_eof = true;
+        parse_eof(lexer, scanner, valid_symbols);
+        return true;
 
-        // The whole point of post_eof is to mark the fact that we've successfully
-        // emitted all of the zero-width tokens that could possibly show up.
-        // Therefore, this **needs** to be after all of the rest of the parsing.
-        } else {
-            scanner->post_eof = true;
-        }
-
-        if (valid_symbols[_EOD_SENTINEL]){
-            printf("!!! eod sentinel\n");
-            emit_token(lexer, scanner, _EOD_SENTINEL);
-            return true;
-        }
-
-    // But do note that if we're at_eof, all other tokens are invalid, and
+    // But do note that if we're at the EoF, all other tokens are invalid, and
     // should be skipped (to help avoid errors and weird states)
     } else {
+        // Parsing the start-of-line always needs to be called first, since
+        // it's dependent on being, well, at the start of the line.
+        if (
+            includes_sol_symbols(valid_symbols)
+            && parse_start_of_line(lexer, scanner, valid_symbols)
+        ) { return true; }
+
+        if (
+            valid_symbols[EOL]
+            && parse_eol(lexer, scanner, valid_symbols)
+        ) { return true; }
+
         if (
             valid_symbols[FLAG_NODE_DEF]
             && parse_flag_node_def(lexer, scanner, valid_symbols)
@@ -923,33 +997,21 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
 
     memcpy(
         &buffer[buffer_offset],
-        &scanner->any_token_emitted,
+        &scanner->token_backlog_index,
         _SCANNER_FIELD_LENGTHS[2]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[2];
 
     memcpy(
         &buffer[buffer_offset],
-        &scanner->eof_eol_emitted,
+        &scanner->eof_emptyline_detected,
         _SCANNER_FIELD_LENGTHS[3]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[3];
 
     memcpy(
         &buffer[buffer_offset],
-        &scanner->at_eof,
+        &scanner->post_eof,
         _SCANNER_FIELD_LENGTHS[4]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[4];
-
-    memcpy(
-        &buffer[buffer_offset],
-        &scanner->post_eof,
-        _SCANNER_FIELD_LENGTHS[5]);
-    buffer_offset += _SCANNER_FIELD_LENGTHS[5];
-
-    memcpy(
-        &buffer[buffer_offset],
-        &scanner->previous_token,
-        _SCANNER_FIELD_LENGTHS[6]);
-    buffer_offset += _SCANNER_FIELD_LENGTHS[6];
 
     unsigned node_stack_count = scanner->node_stack->size;
     size_t node_size = sizeof(Node);
@@ -958,6 +1020,7 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
         &buffer[buffer_offset],
         &node_stack_size,
         sizeof(size_t));
+    buffer_offset += sizeof(size_t);
 
     for (
         unsigned node_index = 0;
@@ -971,6 +1034,36 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
             node_size);
         buffer_offset += node_size;
     }
+
+    unsigned token_backlog_count = scanner->token_backlog->size;
+    size_t pending_token_size = sizeof(PendingToken);
+    size_t backlog_size = pending_token_size * token_backlog_count;
+    memcpy(
+        &buffer[buffer_offset],
+        &backlog_size,
+        sizeof(size_t));
+    buffer_offset += sizeof(size_t);
+
+    for (
+        unsigned backlog_index = 0;
+        backlog_index < token_backlog_count;
+        ++backlog_index
+    ) {
+        PendingToken *pending_token = *array_get(
+            scanner->token_backlog, backlog_index);
+        memcpy(
+            &buffer[buffer_offset],
+            pending_token,
+            pending_token_size);
+        buffer_offset += pending_token_size;
+    }
+
+    // printf(">>> ser backlog size %d\n", scanner->token_backlog->size);
+    // printf(">>> ser post_eof %d\n", scanner->post_eof);
+    // for (int i = 0; i < buffer_offset; i++) {
+    //     printf("%x", buffer[i]);
+    // }
+    // printf("\n\n");
     return buffer_offset;
 }
 
@@ -982,6 +1075,7 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
 ) {
     Scanner *scanner = (Scanner *)payload;
     array_init(scanner->node_stack);
+    array_init(scanner->token_backlog);
 
     if (length == 0) { return; }
 
@@ -1000,46 +1094,33 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
     buffer_offset += _SCANNER_FIELD_LENGTHS[1];
 
     memcpy(
-        &scanner->any_token_emitted,
+        &scanner->token_backlog_index,
         &buffer[buffer_offset],
         _SCANNER_FIELD_LENGTHS[2]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[2];
 
     memcpy(
-        &scanner->eof_eol_emitted,
+        &scanner->eof_emptyline_detected,
         &buffer[buffer_offset],
         _SCANNER_FIELD_LENGTHS[3]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[3];
 
     memcpy(
-        &scanner->at_eof,
+        &scanner->post_eof,
         &buffer[buffer_offset],
         _SCANNER_FIELD_LENGTHS[4]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[4];
 
-    memcpy(
-        &scanner->post_eof,
-        &buffer[buffer_offset],
-        _SCANNER_FIELD_LENGTHS[5]);
-    buffer_offset += _SCANNER_FIELD_LENGTHS[5];
-
-    memcpy(
-        &scanner->previous_token,
-        &buffer[buffer_offset],
-        _SCANNER_FIELD_LENGTHS[6]);
-    buffer_offset += _SCANNER_FIELD_LENGTHS[6];
-
-    unsigned node_stack_count = scanner->node_stack->size;
     size_t node_size = sizeof(Node);
-    size_t node_stack_size = node_size * node_stack_count;
+    size_t node_stack_size;
     memcpy(
         &node_stack_size,
         &buffer[buffer_offset],
         sizeof(size_t));
+    buffer_offset += sizeof(size_t);
 
-    // TODO: we're not currently using the stack size for anything, so... we
-    // could omit it, use it for a sanity check, etc
-    while (buffer_offset < length) {
+    size_t node_stack_end = buffer_offset + node_stack_size;
+    while (buffer_offset < node_stack_end) {
         Node *copied_node = ts_malloc(node_size);
         memcpy(
             copied_node,
@@ -1048,6 +1129,38 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
         array_push(scanner->node_stack, copied_node);
         buffer_offset += node_size;
     }
+
+    size_t pending_token_size = sizeof(PendingToken);
+    size_t backlog_size;
+    memcpy(
+        &backlog_size,
+        &buffer[buffer_offset],
+        sizeof(size_t));
+    buffer_offset += sizeof(size_t);
+
+    size_t backlog_end = buffer_offset + backlog_size;
+    while (buffer_offset < backlog_end) {
+        PendingToken *pending_token = ts_malloc(pending_token_size);
+        memcpy(
+            pending_token,
+            &buffer[buffer_offset],
+            pending_token_size);
+        array_push(scanner->token_backlog, pending_token);
+        buffer_offset += pending_token_size;
+    }
+
+    // This is currently the only real use of storing the backlog size in the
+    // serialized payload -- so we can use it as a sanity check during
+    // deserialization.
+    assert(buffer_offset == length);
+    assert(backlog_end == length);
+    // printf("\n\n");
+    // printf(">>> deser backlog size %d\n", scanner->token_backlog->size);
+    // printf(">>> deser post_eof %d\n", scanner->post_eof);
+    // for (int i = 0; i < buffer_offset; i++) {
+    //     printf("%x", buffer[i]);
+    // }
+    // printf("\n");
 }
 
 
@@ -1056,7 +1169,7 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
 //////////////////////////////////////////////////////////////////////////////
 
 
-static uint8_t _peek_node_depth(
+static uint8_t _peek_node_level(
         /* Use this to check what the node depth of the upcoming/current
         line is **without consuming any of the parse buffer.**
 
@@ -1087,7 +1200,7 @@ static uint8_t _peek_node_depth(
 static bool _consume_indentation(
         TSLexer *lexer,
         Scanner *scanner,
-        uint8_t node_depth
+        uint8_t node_level
 ) {
     // Because we're about to be advancing the lexer, in case we don't find
     // the correct indentation, we do this first, so we don't consume anything
@@ -1096,7 +1209,7 @@ static bool _consume_indentation(
 
     uint8_t indentation_chars_consumed = 0;
     uint8_t indentation_depth = (
-        scanner->indentation_char_repetitions * node_depth);
+        scanner->indentation_char_repetitions * node_level);
     while (indentation_chars_consumed < indentation_depth) {
         if (lexer->eof(lexer)) {
             return false;
