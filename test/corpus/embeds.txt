@@ -133,6 +133,5 @@ __embed__: 'some embed type'
                 (metadata_key)
                 (nih_whitespace)
                 (metadata_value
-                    (STRING1))))
-        (SYMBOL_EMPTY_NODE))
+                    (STRING1)))))
     (empty_line))

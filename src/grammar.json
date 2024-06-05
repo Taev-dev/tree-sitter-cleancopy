@@ -243,11 +243,7 @@
                 },
                 {
                   "type": "SYMBOL",
-                  "name": "_empty_node_sentinel"
-                },
-                {
-                  "type": "SYMBOL",
-                  "name": "SYMBOL_EMPTY_NODE"
+                  "name": "_ext_empty_node"
                 },
                 {
                   "type": "SYMBOL",
@@ -318,11 +314,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "_ext_flag_node_def"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "_SYMBOL_NODE_DEF"
+          "name": "_ext_node_def_symbol"
         },
         {
           "type": "REPEAT",
@@ -558,17 +550,9 @@
       "type": "PATTERN",
       "value": "[^\\S\\r\\n]*\\n"
     },
-    "_SYMBOL_NODE_DEF": {
-      "type": "STRING",
-      "value": ">"
-    },
     "_SYMBOL_METADATA_ASSIGNMENT": {
       "type": "STRING",
       "value": ":"
-    },
-    "SYMBOL_EMPTY_NODE": {
-      "type": "STRING",
-      "value": "<"
     },
     "_SYMBOL_SINGLE_QUOTE": {
       "type": "STRING",
@@ -605,7 +589,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "_empty_node_sentinel"
+      "name": "_ext_empty_node"
     },
     {
       "type": "SYMBOL",
@@ -613,7 +597,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_flag_node_def"
+      "name": "_ext_node_def_symbol"
     },
     {
       "type": "SYMBOL",

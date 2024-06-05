@@ -59,8 +59,7 @@ module.exports = grammar({
                     $._ext_node_end),
                 seq(
                     $._ext_node_continue,
-                    $._empty_node_sentinel,
-                    $.SYMBOL_EMPTY_NODE,
+                    $._ext_empty_node,
                     $._eol))),
 
         node_title: $ => seq(
@@ -77,12 +76,7 @@ module.exports = grammar({
         // content
         node_title_line: $ => seq(
             $._ext_node_continue,
-            // THIS IS REQUIRED! Tree sitter expects two terminals to be
-            // mutually exclusive, evidently. At any rate, it has no way to
-            // notice that the content line includes the node def, unless you
-            // let the external scanner force it to do so.
-            $._ext_flag_node_def,
-            $._SYMBOL_NODE_DEF,
+            $._ext_node_def_symbol,
             repeat($.nih_whitespace),
             optional($.inline_richtext),
             $._eol),
@@ -154,9 +148,7 @@ module.exports = grammar({
         // accidentally consume empty lines following an EOL.
         _LITERAL_EOL: $ => /[^\S\r\n]*\n/,
 
-        _SYMBOL_NODE_DEF: $ => '>',
         _SYMBOL_METADATA_ASSIGNMENT: $ => ':',
-        SYMBOL_EMPTY_NODE: $ => '<',
         _SYMBOL_SINGLE_QUOTE: $ => "'",
         _SYMBOL_DOUBLE_QUOTE: $ => '"'
     },
@@ -164,9 +156,21 @@ module.exports = grammar({
     externals: $ => [
         $._error_sentinel,
         $._node_metadata_sentinel,
-        $._empty_node_sentinel,
+        // Note that we need this to be external so that we can manage the
+        // internal state for the scanner -- we may have previously marked
+        // the pending node as an embedded one, and that needs to be cleared
+        // so we don't accidentally mark the next one as embedded
+        $._ext_empty_node,
         $._ext_flag_embed,
-        $._ext_flag_node_def,
+        // Note that this MUST be external for lexing to happen correctly.
+        // The problem is: treesitter doesn't have a robust mechanism for
+        // defining terminal precedence. So we can't say "try the node def
+        // symbol before trying anything else". Because an entire empty
+        // node declaration could also be parsed as plain node content of the
+        // parent node, that means we have to trigger something to preempt the
+        // internal lexer -- which we can simply do by handling the node def
+        // symbol in the external scanner.
+        $._ext_node_def_symbol,
         $._ext_eol,
         $._ext_empty_line,
         $._ext_nih_whitespace,

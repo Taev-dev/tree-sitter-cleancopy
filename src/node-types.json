@@ -151,16 +151,6 @@
           }
         ]
       }
-    },
-    "children": {
-      "multiple": false,
-      "required": false,
-      "types": [
-        {
-          "type": "SYMBOL_EMPTY_NODE",
-          "named": true
-        }
-      ]
     }
   },
   {
@@ -254,10 +244,6 @@
   },
   {
     "type": "STRING2",
-    "named": true
-  },
-  {
-    "type": "SYMBOL_EMPTY_NODE",
     "named": true
   },
   {

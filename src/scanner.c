@@ -20,9 +20,9 @@ typedef enum {
     // if it's an embed node
     _NODE_METADATA_SENTINEL,
     // We use this for state management re: pending nodes
-    _EMPTY_NODE_SENTINEL,
+    NODE_EMPTY,
     FLAG_EMBED,
-    FLAG_NODE_DEF,
+    NODE_DEF,
     EOL,
     EMPTY_LINE,
     NIH_WHITESPACE,
@@ -35,9 +35,9 @@ typedef enum {
 const char* _TokenNames[] = {
     "_ERROR_SENTINEL",
     "_NODE_METADATA_SENTINEL",
-    "_EMPTY_NODE_SENTINEL",
+    "NODE_EMPTY",
     "FLAG_EMBED",
-    "FLAG_NODE_DEF",
+    "NODE_DEF",
     "EOL",
     "EMPTY_LINE",
     "NIH_WHITESPACE",
@@ -48,19 +48,12 @@ const char* _TokenNames[] = {
     "AUTOCLOSE_WARNING"};
 
 
-static bool includes_sol_symbols(
-        /* This is a simple helper function that just checks to see if
-        any of the currently valid symbols include the start of the
-        line, which triggers a special parse mechanism.
-        */
-        const bool *valid_symbols
-) {
-    return (
-        valid_symbols[EMPTY_LINE]
-        || valid_symbols[NODE_CONTINUE]
-        || valid_symbols[NODE_BEGIN]
-        || valid_symbols[NODE_END]);
-}
+const TokenType SOL_SYMBOLS[] = {
+    EMPTY_LINE,
+    NODE_CONTINUE,
+    NODE_BEGIN,
+    NODE_END
+};
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -169,6 +162,7 @@ typedef struct {
 typedef struct {
     TokenType token;
     size_t advance_count;
+    bool skip_mark;
 } PendingToken;
 
 
@@ -251,19 +245,46 @@ void tree_sitter_cleancopy_external_scanner_destroy(
     // it doesn't handle this.
     for (size_t i = 0; i < scanner->node_stack->size; ++i) {
         printf("!!! WARNING: node_stack had nodes on destruction!\n");
-        ts_free(array_get(scanner->node_stack, i));
+        ts_free(*array_get(scanner->node_stack, i));
     }
     array_delete(scanner->node_stack);
     // Same goes for the token backlog.
     for (size_t i = 0; i < scanner->token_backlog->size; ++i) {
-        printf("!!! WARNING: token backlog not empty on destruction!\n");
-        ts_free(array_get(scanner->token_backlog, i));
+        // Note that, because the token backlog only gets cleared if we call
+        // emit_from_backlog ^^with an empty backlog^^, we can expect that the
+        // backlog will have token(s) on destruction. However, they should
+        // already have been emitted -- otherwise we should definitely warn!
+        if (i > scanner->token_backlog_index) {
+            printf("!!! WARNING: token backlog not empty on destruction!\n");
+        }
+
+        ts_free(*array_get(scanner->token_backlog, i));
     }
     array_delete(scanner->token_backlog);
 
     ts_free(scanner);
     // printf("\n\n##### PARSE END #####\n");
 }
+
+
+//////////////////////////////////////////////////////////////////////////////
+// HELPERS
+//////////////////////////////////////////////////////////////////////////////
+
+
+typedef struct {
+    // Positive matches: found a specific token
+    bool positive_match_found;
+    // Negative matches: we know no token can be found
+    bool negative_match_found;
+    // Together, these describe which mutations we've done to the lexer.
+    // Mostly (only?) useful for sanity-check assertions
+    uint16_t lexer_col_at_start;
+    bool lexer_marked;
+    uint16_t lexer_last_marked_col;
+
+    const bool *valid_symbols;
+} ScanState;
 
 
 static void push_node(
@@ -302,18 +323,6 @@ static void reset_backlog(
 }
 
 
-static void pop_and_free_node(
-        /* Removes the tail node from the scanner's node stack and frees
-        any memory associated with it.
-        */
-        Scanner *scanner
-) {
-    if (scanner->node_stack->size > 0) {
-        ts_free(array_pop(scanner->node_stack));
-    }
-}
-
-
 static void schedule_token(
         /* Frequently, consuming some character(s) will result in
         multiple tokens, each of which may or may not be zero-length.
@@ -325,23 +334,88 @@ static void schedule_token(
         **Note that you still need to emit the first token, though!**
         */
         Scanner *scanner,
+        ScanState *scan_state,
         TokenType token,
-        size_t advance_count
+        size_t advance_count,
+        bool already_consumed
 ) {
+    // Note that all of these are checking the pre-existing state; NOT the
+    // current scheduling call. That's why we then immediately update
+    // everything. This is all defensive against bugs we've written elsewhere.
+    assert(advance_count == 0 || scanner->token_backlog->size == 0 || !already_consumed);
+    assert(advance_count == 0 || !scan_state->positive_match_found | !already_consumed);
+    assert(!scan_state->negative_match_found);
+    assert(advance_count == 0 || !already_consumed || scan_state->lexer_marked);
+
+    scan_state->positive_match_found = true;
     PendingToken *pending_token = ts_malloc(sizeof(PendingToken));
     pending_token->token = token;
-    pending_token->advance_count = advance_count;
+
+    if (already_consumed){
+        pending_token->advance_count = 0;
+        pending_token->skip_mark = true;
+
+    } else {
+        pending_token->advance_count = advance_count;
+        pending_token->skip_mark = false;
+    }
+
     array_push(scanner->token_backlog, pending_token);
 }
 
 
-//////////////////////////////////////////////////////////////////////////////
-// SCANNING
-//////////////////////////////////////////////////////////////////////////////
+static void consume_advances_from_lexer(
+        /* The way we have things set up, we need to explicitly call
+        mark_end any time we want to consume characters from the lexer
+        during scanning. This helper does that, along with a few
+        bookkeeping tasks and sanity checks.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state,
+        bool allow_existing_consumption
+) {
+    if (!allow_existing_consumption) {
+        assert(
+            scan_state->lexer_last_marked_col
+            == scan_state->lexer_col_at_start);
+    }
+
+    lexer->mark_end(lexer);
+    scan_state->lexer_last_marked_col = lexer->get_column(lexer);
+    scan_state->lexer_marked = true;
+}
 
 
-// TODO: this should be replaced by a general-purpose ParseState that is
-// used directly by the scanner!
+static bool can_parse(
+        /* Returns True if the scan_state allows parsing **any** of the
+        passed token_types.
+        */
+        ScanState *scan_state,
+        TokenType token_types[]
+) {
+    if (
+        scan_state->negative_match_found
+        || scan_state->positive_match_found
+    ) {
+        return false;
+    }
+
+    TokenType this_token;
+    for (
+        size_t i = 0;
+        i < (sizeof(token_types) / sizeof(TokenType));
+        ++i
+    ) {
+        this_token = token_types[i];
+        if (scan_state->valid_symbols[this_token]) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+
 static void emit_token(
         /* Helper for all the bookkeeping we need to do any time we
         emit a token. **Note that the caller is still responsible for
@@ -351,12 +425,73 @@ static void emit_token(
         Scanner *scanner,
         TokenType token
 ) {
+    assert(lexer->result_symbol == 0);
     printf("... emitting %s\n", _TokenNames[token]);
-    printf(
-        "... if existing token, then: %s\n",
-        _TokenNames[lexer->result_symbol]);
     lexer->result_symbol = token;
 }
+
+
+static bool emit_from_backlog(
+        /* This works through the backlog (one token per scan pass),
+        returning True if there was a token to emit.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        const bool *valid_symbols
+) {
+    uint8_t token_backlog_size = scanner->token_backlog->size;
+    if (token_backlog_size > 0) {
+        uint8_t token_backlog_index = scanner->token_backlog_index;
+        // We've worked through the whole backlog; time to reset it
+        // Note: >= is purely defensive here; should only ever be ==
+        if (token_backlog_index >= token_backlog_size) {
+            // printf("!!! token backlog processed; clearing\n");
+            reset_backlog(scanner);
+
+            // NOTE NO RETURN HERE! We want to continue processing as usual.
+
+        } else {
+            PendingToken *pending_token = *array_get(
+                scanner->token_backlog, token_backlog_index);
+
+            // Note that, because of how treesitter works -- try impossible
+            // branches and then backtrack on failure -- we may find ourselves
+            // in situations where the pending token isn't a valid symbol. In
+            // that case... well, we can just return the wrong token, I guess,
+            // and let tree sitter deal with its own mess
+            if (!valid_symbols[pending_token->token]) {
+                printf(
+                    "!!! backlog token not valid at position; forcing backtrack\n");
+            }
+
+            // printf(
+            //     "!!! processing token backlog %d: %d\n",
+            //     token_backlog_index, pending_token->token);
+            scanner->token_backlog_index += 1;
+
+            if (!pending_token->skip_mark){
+                for (size_t i = 0; i < pending_token->advance_count; ++i) {
+                    lexer->advance(lexer, false);
+                }
+                lexer->mark_end(lexer);
+            }
+            emit_token(lexer, scanner, pending_token->token);
+
+            // Note that we can't free the memory for each individual pending
+            // token here, since it would just get re-allocated on the next
+            // deserialization, because we're not mutating the actual array
+            // until the whole thing is consumed.
+
+            return true;
+        }
+    }
+
+    return false;
+}
+
+//////////////////////////////////////////////////////////////////////////////
+// SCANNING
+//////////////////////////////////////////////////////////////////////////////
 
 
 typedef struct {
@@ -676,7 +811,7 @@ static bool check_for_empty_line(
 }
 
 
-static bool parse_start_of_line(
+static void handle_start_of_line(
         /* We have several different tokens that are all valid at the
         start of the line, and all need to know exactly how much
         whitespace exists from the beginning of the line. However, we
@@ -696,31 +831,32 @@ static bool parse_start_of_line(
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
     // This should be obvious, but if we aren't at the beginning of the line,
     // these aren't the droids you're looking for. This should be redundant
     // WRT the grammar, but the interplay between the different moving parts
     // can be a little hard to reason about
-    if (lexer->get_column(lexer) != 0) { return false; }
-    if (lexer->eof(lexer)){ return false; }
+    if (
+        lexer->get_column(lexer) != 0
+        || lexer->eof(lexer)
+    ) { return; }
 
     _SolParseState *parse_state = ts_malloc(sizeof(_SolParseState));
     parse_state->preliminary_token_found = false;
     parse_state->preliminary_indentation_depth = 0;
     parse_state->indentation_chars_found = 0;
     parse_state->lookahead_at_line_start = lexer->lookahead;
-    lexer->mark_end(lexer);
 
     // NOTE: order matters here! We need to go in order from least to most
     // indentation.
-    if (valid_symbols[NODE_END]) {
+    if (scan_state->valid_symbols[NODE_END]) {
         advance_to_maybe_node_end(lexer, scanner, parse_state);
     }
-    if (valid_symbols[NODE_CONTINUE]) {
+    if (scan_state->valid_symbols[NODE_CONTINUE]) {
         advance_to_maybe_node_continue(lexer, scanner, parse_state);
     }
-    if (valid_symbols[NODE_BEGIN]) {
+    if (scan_state->valid_symbols[NODE_BEGIN]) {
         advance_to_maybe_node_begin(lexer, scanner, parse_state);
     }
 
@@ -738,29 +874,42 @@ static bool parse_start_of_line(
         parse_state->preliminary_token_found
         && parse_state->preliminary_token == NODE_CONTINUE
     ) {
-        lexer->mark_end(lexer);
+        consume_advances_from_lexer(lexer, scan_state, false);
     }
 
     // We may or may not have found a preliminary token, but we still need to
     // check to see if the whole line is empty, since this could have more
     // (or less!) whitespace than any of the above.
     if (
-        valid_symbols[EMPTY_LINE]
+        scan_state->valid_symbols[EMPTY_LINE]
         && check_for_empty_line(lexer, scanner, parse_state)
     ){
         // Early return here, to override the preliminary token found. Also
         // be sure to mark the end, so that we advance until the start of the
         // next line, and don't get stuck in an infinite loop. DO NOT schedule
         // the newline here, even if at EoF -- let the EoF handler do that!
-        lexer->mark_end(lexer);
-        emit_token(lexer, scanner, EMPTY_LINE);
-        ts_free(parse_state);
-        return true;
-    }
+        consume_advances_from_lexer(lexer, scan_state, true);
+        schedule_token(
+            scanner,
+            scan_state,
+            EMPTY_LINE,
+            scan_state->lexer_last_marked_col - scan_state->lexer_col_at_start,
+            true);
 
-    // No early return, so no empty line. Check to see if we found a token.
-    // If so, we need to update the lex state; if not, return false.
-    if (parse_state->preliminary_token_found) {
+    // No empty line. If we found any other token, we might have some
+    // additional bookkeeping to do before scheduling it.
+    } else if (parse_state->preliminary_token_found) {
+        // Schedule the relevant token first, do the bookkeeping afterwards.
+        // This allows us to emit, for example, the FLAG_EMBED **after** the
+        // NODE_BEGIN, which makes the grammar simpler.
+        // Note: we consumed advances for the NODE_CONTINUE already!
+        schedule_token(
+            scanner,
+            scan_state,
+            parse_state->preliminary_token,
+            scan_state->lexer_last_marked_col - scan_state->lexer_col_at_start,
+            true);
+
         // We need to be really careful that these are ALWAYS emitted at the
         // EoF, regardless of what happens, so we handle these separately.
         if (parse_state->preliminary_token == NODE_END) {
@@ -783,24 +932,18 @@ static bool parse_start_of_line(
             // __embed__ node, which means we need to now, finally, schedule
             // the delayed token for it
             if (scanner->pending_embed_node) {
-                schedule_token(scanner, FLAG_EMBED, 0);
+                schedule_token(scanner, scan_state, FLAG_EMBED, 0, true);
             }
 
             scanner->pending_embed_node = false;
         }
-
-        // Note: we called mark_end for the NODE_CONTINUE already!
-        emit_token(lexer, scanner, parse_state->preliminary_token);
-        ts_free(parse_state);
-        return true;
     }
 
     ts_free(parse_state);
-    return false;
 }
 
 
-static bool parse_eof(
+static void handle_eof(
         /* Treesitter doesn't give us a formal EoF token, but we may
         need to do a bunch of zero-width tokens here. Therefore, we call
         this as soon as we detect an EoF, and handle everything here.
@@ -814,7 +957,7 @@ static bool parse_eof(
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
     // We use this in exactly one place: in the EoL handler, if we -- as the
     // name suggests -- find the EoF immediately after the EoL. In that case,
@@ -822,7 +965,7 @@ static bool parse_eof(
     // reordered after closing stuff. However, in all other cases, we need to
     // close out the current line first.
     if (!scanner->eof_detected_immediately_after_eol){
-        emit_token(lexer, scanner, EOL);
+        schedule_token(scanner, scan_state, EOL, 0, true);
     }
 
     // If you decide you want to make empty lines part of the parent block
@@ -835,7 +978,7 @@ static bool parse_eof(
         while (current_indentation_level > 0) {
             Node *node_to_end = array_pop(scanner->node_stack);
             assert(node_to_end->node_level == current_indentation_level);
-            schedule_token(scanner, NODE_END, 0);
+            schedule_token(scanner, scan_state, NODE_END, 0, true);
             ts_free(node_to_end);
             current_indentation_level -= 1;
         }
@@ -856,24 +999,13 @@ static bool parse_eof(
     // then a newline from here.
     // Note: lexer->get_column **always returns 0 at EoF!**
     if (scanner->eof_detected_immediately_after_eol) {
-        schedule_token(scanner, EMPTY_LINE, 0);
-        schedule_token(scanner, EOL, 0);
-
-        // TODO: this is a quick hack to see if things work, but the problem is
-        // that we haven't actually emitted a token at this point, which means
-        // the scanner will return True without having set a return token,
-        // which results in it reporting token 0, ie, the error sentinel
-        PendingToken *pending_token = *array_get(
-            scanner->token_backlog, scanner->token_backlog_index);
-        emit_token(lexer, scanner, pending_token->token);
-        scanner->token_backlog_index += 1;
+        schedule_token(scanner, scan_state, EMPTY_LINE, 0, true);
+        schedule_token(scanner, scan_state, EOL, 0, true);
     }
-
-    return true;
 }
 
 
-static bool parse_eol(
+static void detect_and_schedule_eol(
         /* We need to parse the EoL externally for two reasons: first of
         all, the interplay with empty lines -- which might be a
         zero-length token between two newlines -- is very tricky.
@@ -882,103 +1014,85 @@ static bool parse_eol(
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
     if (lexer->lookahead == NEWLINE) {
+        // NOTE: we actually **need** to advance here, because we need to
+        // check for the immediately following EoF immediately after
+        // scheduling!
         lexer->advance(lexer, false);
-        emit_token(lexer, scanner, EOL);
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(scanner, scan_state, EOL, 1, true);
 
-        // We want to let the EoF handler, and ^^only^^ the EoF handler,
-        // deal with all the EoF tokens, because it makes the code much
-        // cleaner. However:
-        // ++  it can't read backwards
+        // Note:
+        // ++  the EoF handler can't read backwards
         // ++  the lexer always returns a column of 0 at EoF
         // ++  start-of-line handling gets skipped at EoF
-        // Therefore, the EoF handler has no way to know if it immediately
-        // follows a newline, and therefore no idea if it needs to emit an
-        // empty line or not. So we notate that here.
-        // Note that we don't want to actually EMIT the token here, because
-        // we might need to reorder it with respect to other tokens that need
-        // to be added to the backlog (ex node_end)
+        // Therefore, we need to store this on the scanner, so that it knows
+        // to emit an empty line (but we don't want to schedule it here,
+        // because the EoF handler can reorder it with respect to other
+        // zero-width tokens, ex node_ends)
         if (lexer->eof(lexer)) {
             scanner->eof_detected_immediately_after_eol = true;
         }
-
-        return true;
     }
-
-    return false;
 }
 
 
-static bool parse_flag_node_def(
-        /* Treesitter doesn't recognize ambiguities in terminals, so it
-        never notices conflicts between ``>``, which is generally
-        permissible in node content **except** at the start of the line,
-        and the node marker, which is only permissible at the start of
-        the line.
+static void detect_and_schedule_node_def(
+        /* So... the problem is, treesitter doesn't have a robust
+        mechanism for defining terminal precedence. So we can't say
+        "try the node def symbol before trying anything else". And
+        because an empty node declaration is indistinguishable from
+        normal node content without that preemption, it means that
+        treesitter never detects that it's down the wrong branch of the
+        parse tree. Therefore, we need a way to define terminal
+        precedence.
 
-        We use this zero-width token as a flag, to force the parse tree
-        to be invalid for node content, and therefore switch over to
-        parsing a node definition.
+        Luckily, the external scanner is always called first, before any
+        internal lexing. This lets us hard-code the precedence within
+        the order of detection calls within the external_scan entrypoint.
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
     if (lexer->lookahead == NODEDEF_SYMBOL) {
-        emit_token(lexer, scanner, FLAG_NODE_DEF);
-        return true;
+        schedule_token(scanner, scan_state, NODE_DEF, 1, false);
     }
-    return false;
 }
 
 
-
-
-
-static bool verify_and_cleanup_for_empty_node(
+static void detect_and_schedule_empty_node(
         /* Because of the way we handle embedded nodes -- where we need to
         store scanner state of "pending embedded node" and then replay the
         embedded node flag ^^out of order^^ -- we need to store the upcoming
         node state on the scanner. However, we also need to clear it in case
         of an empty node, or the next child node could erroneously be marked
-        as an embedded node. Therefore, we use a zero-width sentinel to force
-        treesitter to call the external scanner, which ends up here, allowing
-        us to clean up the scanner state and resume normal parsing.
+        as an embedded node. Therefore, we handle the entire empty node
+        marker here.
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
-    lexer->mark_end(lexer);
-    if (lexer->lookahead != EMPTY_NODE_SYMBOL) {
-        printf(
-            "!!! WARNING: treesitter asked for empty node sentinel without "
-            "upcoming empty node!\n");
-        return false;
+    if (lexer->lookahead == EMPTY_NODE_SYMBOL) {
+        scanner->pending_embed_node = false;
+        schedule_token(scanner, scan_state, NODE_EMPTY, 1, false);
     }
-
-    scanner->pending_embed_node = false;
-    emit_token(lexer, scanner, _EMPTY_NODE_SENTINEL);
-    return true;
 }
 
 
-
-
-
-static bool check_for_node_embed(
+static void mark_if_pending_embedding(
         /* This takes advantage of our metadata sentinel to examine the
         upcoming metadata key. If it matches the EMBED_MAGIC, we set the
         correct state on the scanner to indicate that the upcoming node
-        is an embedded one.
+        is an embedded one, but we don't yet emit the token itself.
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
-    lexer->mark_end(lexer);
     for (
         size_t i = 0;
         i < (sizeof(EMBED_MAGIC) / sizeof(EMBED_MAGIC[0]));
@@ -987,21 +1101,20 @@ static bool check_for_node_embed(
         printf("checking char %d\n", i);
         if (lexer->lookahead != EMBED_MAGIC[i]) {
             printf("no embed found\n");
-            return false; }
+            return; }
         lexer->advance(lexer, false);
     }
 
     if (lexer->lookahead == METADATA_ASSIGNMENT_SYMBOL) {
         printf("embed found\n");
         scanner->pending_embed_node = true;
-        return true;
     }
 
-    return false;
+    schedule_token(scanner, scan_state, _NODE_METADATA_SENTINEL, 0, true);
 }
 
 
-static bool parse_nih_whitespace(
+static void detect_and_schedule_nih_whitespace(
         /* Non-indentation horizontal whitespace is used in various
         places, typically as an optional visual divider. We keep it
         within the external scanner so that we always have an exact and
@@ -1011,41 +1124,28 @@ static bool parse_nih_whitespace(
         */
         TSLexer *lexer,
         Scanner *scanner,
-        const bool *valid_symbols
+        ScanState *scan_state
 ) {
     if (
         lexer->get_column(lexer) != 0
         && is_horizontal_whitespace(lexer->lookahead)
     ) {
-        lexer->advance(lexer, false);
-        emit_token(lexer, scanner, NIH_WHITESPACE);
-        return true;
+        schedule_token(scanner, scan_state, NIH_WHITESPACE, 1, false);
     }
-    return false;
 }
 
 
 bool tree_sitter_cleancopy_external_scanner_scan(
-        /* TODO: refactor the backlog handling into a separate helper function
-        that returns bool to determine if parsing should continue
-
-        TODO: refactor start-of-line flags into separate mechanism within
+        /* TODO: refactor start-of-line flags into separate mechanism within
         the SoL handler that schedules tokens, instead of parsing them
         separately
-
-
-
-
-        TODO IMPORTANT: empty nodes need to call this, so that we can reset
-        the pending node state!
-
-
         */
         void *payload,
         TSLexer *lexer,
         const bool *valid_symbols
 ) {
     Scanner *scanner = (Scanner *)payload;
+
     // As per treesitter docs, the first thing that happens when treesitter
     // encounters a parse error is to call the external scanner with all tokens
     // valid. We're not currently set up to handle that, so simply return false.
@@ -1055,41 +1155,18 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         printf("!!! ERROR SENTINEL!\n");
         return false; }
 
-    uint8_t token_backlog_size = scanner->token_backlog->size;
-    if (token_backlog_size > 0) {
-        uint8_t token_backlog_index = scanner->token_backlog_index;
-        // We've worked through the whole backlog; time to reset it
-        // Note: >= is purely defensive here; should only ever be ==
-        if (token_backlog_index >= token_backlog_size) {
-            // printf("!!! token backlog processed; clearing\n");
-            reset_backlog(scanner);
+    if (emit_from_backlog(lexer, scanner, valid_symbols)) {
+        printf("<<< from backlog!\n");
+        return true; }
 
-            // NOTE NO RETURN HERE! We want to continue processing as usual.
-
-        } else {
-            PendingToken *pending_token = *array_get(
-                scanner->token_backlog, token_backlog_index);
-            printf("... backlog token %s\n", _TokenNames[pending_token->token]);
-            assert(valid_symbols[pending_token->token]);
-            // printf(
-            //     "!!! processing token backlog %d: %d\n",
-            //     token_backlog_index, pending_token->token);
-            scanner->token_backlog_index += 1;
-
-            for (size_t i = 0; i < pending_token->advance_count; ++i) {
-                lexer->advance(lexer, false);
-            }
-            lexer->mark_end(lexer);
-            emit_token(lexer ,scanner, pending_token->token);
-
-            // Note that we can't free the memory for each individual pending
-            // token here, since it would just get re-allocated on the next
-            // deserialization, because we're not mutating the actual array
-            // until the whole thing is consumed.
-
-            return true;
-        }
-    }
+    ScanState *scan_state = ts_malloc(sizeof(ScanState));
+    scan_state->positive_match_found = false;
+    scan_state->negative_match_found = false;
+    scan_state->lexer_col_at_start = lexer->get_column(lexer);
+    scan_state->lexer_marked = false;
+    scan_state->valid_symbols = valid_symbols;
+    scan_state->lexer_last_marked_col = scan_state->lexer_col_at_start;
+    lexer->mark_end(lexer);
 
     // Once we hit this, we've scheduled **and emitted** all of the meaningful
     // tokens. The only thing we have left to do is emit the _EOD sentinel to
@@ -1098,76 +1175,65 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     // the eof.
     if (scanner->post_eof) {
         // printf(">>> found post_eof\n");
-        emit_token(lexer, scanner, EoF);
-        return true;
+        schedule_token(scanner, scan_state, EoF, 0, false);
 
-    // Just because we're at the EoF, doesn't mean we're out of tokens.
-    // We still have a number of possible zero-width tokens. However, we need
-    // to be REALLY careful here, or we'll end up in an infinite loop at the
-    // end of parsing. This is our last chance to schedule any remaining
-    // tokens; we can't come back to this block without having an infinite
-    // loop at the EoF.
-    } else if (lexer->eof(lexer)) {
-        scanner->post_eof = true;
-        parse_eof(lexer, scanner, valid_symbols);
-        return true;
-
-    // But do note that if we're at the EoF, all other tokens are invalid, and
-    // should be skipped (to help avoid errors and weird states)
     } else {
-        // printf("--- checkpoint1. valid symbols:\n");
-        // for (
-        //     size_t i = _ERROR_SENTINEL;
-        //     i <= AUTOCLOSE_WARNING;
-        //     i++
-        // ) {
-        //     printf("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
-        // }
 
-        // Parsing the start-of-line always needs to be called first, since
-        // it's dependent on being, well, at the start of the line.
-        if (
-            includes_sol_symbols(valid_symbols)
-            && parse_start_of_line(lexer, scanner, valid_symbols)
-        ) { return true; }
+        // Just because we're at the EoF, doesn't mean we're out of tokens.
+        // We still have a number of possible zero-width tokens. However, we need
+        // to be REALLY careful here, or we'll end up in an infinite loop at the
+        // end of parsing. This is our last chance to schedule any remaining
+        // tokens; we can't come back to this block without having an infinite
+        // loop at the EoF.
+        if (lexer->eof(lexer)) {
+            scanner->post_eof = true;
+            handle_eof(lexer, scanner, scan_state);
 
-        // The actual empty node symbol is handled by the treesitter-internal
-        // lexer, but we need to do some state cleanup (to remove the pending
-        // node info from the scanner).
-        // I'm not 100% sure why, but currently this needs to be before the
-        // node metadata sentinel.
-        if (
-            valid_symbols[_EMPTY_NODE_SENTINEL]
-            && verify_and_cleanup_for_empty_node(lexer, scanner, valid_symbols)
-        ) {
-            return true;
+        // But do note that if we're at the EoF, all other tokens are invalid, and
+        // should be skipped (to help avoid errors and weird states)
+        } else {
+            // printf("--- checkpoint1. valid symbols:\n");
+            // for (
+            //     size_t i = _ERROR_SENTINEL;
+            //     i <= AUTOCLOSE_WARNING;
+            //     i++
+            // ) {
+            //     printf("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
+            // }
+
+            // The start-of-line handler always needs to be called first, since
+            // it's dependent on being, well, at the start of the line.
+            if (can_parse(scan_state, SOL_SYMBOLS)) {
+                handle_start_of_line(lexer, scanner, scan_state);}
+            // The actual empty node symbol is handled by the treesitter-internal
+            // lexer, but we need to do some state cleanup (to remove the pending
+            // node info from the scanner).
+            // I'm not 100% sure why, but currently this needs to be before the
+            // node metadata sentinel.
+            if (can_parse(scan_state, (TokenType[1]){NODE_EMPTY})){
+                detect_and_schedule_empty_node(lexer, scanner, scan_state);}
+            // We use this sentinel to force treesitter into our external scanner,
+            // so we can examine the metadata key, and decide whether it indicates
+            // a pending embed node
+            if (can_parse(scan_state, (TokenType[1]){_NODE_METADATA_SENTINEL})){
+                mark_if_pending_embedding(lexer, scanner, scan_state);}
+
+            if (can_parse(scan_state, (TokenType[1]){EOL})){
+                detect_and_schedule_eol(lexer, scanner, scan_state);}
+            if (can_parse(scan_state, (TokenType[1]){NODE_DEF})){
+                detect_and_schedule_node_def(lexer, scanner, scan_state);}
+            if (can_parse(scan_state, (TokenType[1]){NIH_WHITESPACE})){
+                detect_and_schedule_nih_whitespace(lexer, scanner, scan_state);}
         }
-
-        // We use this sentinel to force treesitter into our external scanner,
-        // so we can examine the metadata key, and decide whether it indicates
-        // a pending embed node
-        if (valid_symbols[_NODE_METADATA_SENTINEL]) {
-            check_for_node_embed(lexer, scanner, valid_symbols);
-            emit_token(lexer, scanner, _NODE_METADATA_SENTINEL);
-            return true;
-        }
-
-        if (
-            valid_symbols[EOL]
-            && parse_eol(lexer, scanner, valid_symbols)
-        ) { return true; }
-
-        if (
-            valid_symbols[FLAG_NODE_DEF]
-            && parse_flag_node_def(lexer, scanner, valid_symbols)
-        ) { return true; }
-
-        if (
-            valid_symbols[NIH_WHITESPACE]
-            && parse_nih_whitespace(lexer, scanner, valid_symbols)
-        ) { return true; }
     }
 
+    if (scan_state->positive_match_found) {
+        emit_from_backlog(lexer, scanner, valid_symbols);
+        ts_free(scan_state);
+        return true;
+    }
+
+    ts_free(scan_state);
     return false;
 }
 
@@ -1372,68 +1438,4 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
     //     printf("%x", buffer[i]);
     // }
     // printf("\n");
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// GC
-//////////////////////////////////////////////////////////////////////////////
-
-
-static uint8_t _peek_node_level(
-        /* Use this to check what the node depth of the upcoming/current
-        line is **without consuming any of the parse buffer.**
-
-        Note that this requires the indentation info to already be set
-        on the scanner.
-        */
-        TSLexer *lexer,
-        Scanner *scanner
-) {
-    lexer->mark_end(lexer);
-
-    uint8_t indentation_chars_found = 0;
-    while (
-        !lexer->eof(lexer)
-        && lexer->lookahead == scanner->indentation_char
-    ) {
-        ++indentation_chars_found;
-        lexer->advance(lexer, false);
-    }
-
-    // Note that, since we're working with integers, this will round towards
-    // 0, meaning that we'll automatically round down to the nearest FULL
-    // indentation level -- which is exactly what we want
-    return indentation_chars_found / scanner->indentation_char_repetitions;
-}
-
-
-static bool _consume_indentation(
-        TSLexer *lexer,
-        Scanner *scanner,
-        uint8_t node_level
-) {
-    // Because we're about to be advancing the lexer, in case we don't find
-    // the correct indentation, we do this first, so we don't consume anything
-    // in the error case (note: I'm not 100% sure this is necessary!)
-    lexer->mark_end(lexer);
-
-    uint8_t indentation_chars_consumed = 0;
-    uint8_t indentation_depth = (
-        scanner->indentation_char_repetitions * node_level);
-    while (indentation_chars_consumed < indentation_depth) {
-        if (lexer->eof(lexer)) {
-            return false;
-        } else if (lexer->lookahead == scanner->indentation_char) {
-            lexer->advance(lexer, false);
-            ++indentation_chars_consumed;
-        } else {
-            return false;
-        }
-    }
-
-    // We got this far. We consumed all of the indentation we expected without
-    // error, so we can update the endpoint and return true.
-    lexer->mark_end(lexer);
-    return true;
 }
