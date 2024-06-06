@@ -6,10 +6,7 @@
 module.exports = grammar({
     name: 'cleancopy',
 
-    // Skip carriage returns (should normalize the line endings)
-    // Note that, because treesitter supports neither the start-of-line
-    // assertion nor zero-width matches, we cannot include empty line here
-    extras: ($) => ['\r'],
+    extras: ($) => [],
 
     // I can't, no matter how hard I try, get these conflicts to resolve within
     // the grammar. I've even tried grammars I'm 99% sure are conflict-free.

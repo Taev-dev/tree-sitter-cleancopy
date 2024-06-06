@@ -81,6 +81,7 @@ static const int32_t SPACE_CHAR[] = {
 static const int32_t TAB_CHAR[] = {
     0x0009,};
 static const int32_t NEWLINE = 0x000A;
+static const int32_t CR = 0x000D;
 static const int32_t ZWSP = 0x200B;
 static const int32_t ZWNBSP = 0xFEFF;
 static const int32_t NODEDEF_SYMBOL = 0x003E;
@@ -130,7 +131,11 @@ static bool is_tab(
 static bool is_horizontal_whitespace(
         int32_t lookahead
 ) {
-    return is_space(lookahead) || (lookahead == ZWNBSP) || (lookahead == ZWSP);
+    return (
+        is_space(lookahead)
+        || is_tab(lookahead)
+        || (lookahead == ZWNBSP)
+        || (lookahead == ZWSP));
 }
 
 
@@ -186,10 +191,9 @@ typedef struct {
     // treesitter expects the grammar to be
     bool pending_embed_node;
 
-    // We use this to indicate to the EoF handler that we detected an empty
-    // line before this. We can't rely on the lexer to tell us this is the
-    // case, because it always reports a column of 0 at EoF.
+    // UNUSED. TODO: REMOVE!
     bool eof_detected_immediately_after_eol;
+
     // We use this to denote that we've already processed the EoF and added
     // any trailing zero-length tokens to the backlog. If this is true, and
     // the token backlog is consumed, then parsing is finished.
@@ -285,22 +289,6 @@ typedef struct {
 
     const bool *valid_symbols;
 } ScanState;
-
-
-static void push_node(
-        /* Adds a new node to the scanner's node stack, growing the stack
-        automatically.
-        */
-        Scanner *scanner,
-        uint8_t node_level,
-        bool is_embed
-) {
-    Node *node = ts_malloc(sizeof(Node));
-    node->node_level = node_level;
-    node->is_embed = is_embed;
-
-    array_push(scanner->node_stack, node);
-}
 
 
 static void reset_backlog(
@@ -418,7 +406,8 @@ static bool can_parse(
 
 static void emit_token(
         /* Helper for all the bookkeeping we need to do any time we
-        emit a token. **Note that the caller is still responsible for
+        emit a token, **including all state mutation associated with the
+        token. **Note that the caller is still responsible for
         advancing the lexer if required!!!**
         */
         TSLexer *lexer,
@@ -428,6 +417,33 @@ static void emit_token(
     assert(lexer->result_symbol == 0);
     printf("... emitting %s\n", _TokenNames[token]);
     lexer->result_symbol = token;
+
+    if (token == NODE_BEGIN) {
+        uint8_t current_node_level;
+        if (scanner->node_stack->size > 0){
+            current_node_level = (
+                (Node *)*array_back(scanner->node_stack))->node_level;
+        } else {
+            current_node_level = 0;
+        }
+
+        Node *node = ts_malloc(sizeof(Node));
+        node->node_level = current_node_level + 1;
+        node->is_embed = scanner->pending_embed_node;
+        array_push(scanner->node_stack, node);
+
+        scanner->pending_embed_node = false;
+    } else if (token == NODE_EMPTY) {
+        scanner->pending_embed_node = false;
+    } else if (token == NODE_END) {
+        assert(scanner->node_stack->size > 0);
+        Node *node_to_end = array_pop(scanner->node_stack);
+        // We'll need a helper at some point to close out any misc richtext
+        // formatting that might be open still; that will go right here
+        ts_free(node_to_end);
+
+        assert(!scanner->pending_embed_node);
+    }
 }
 
 
@@ -461,7 +477,9 @@ static bool emit_from_backlog(
             // and let tree sitter deal with its own mess
             if (!valid_symbols[pending_token->token]) {
                 printf(
-                    "!!! backlog token not valid at position; forcing backtrack\n");
+                    "!!! backlog token not valid at position (%s); forcing "
+                    "backtrack\n",
+                    _TokenNames[pending_token->token]);
             }
 
             // printf(
@@ -471,7 +489,14 @@ static bool emit_from_backlog(
 
             if (!pending_token->skip_mark){
                 for (size_t i = 0; i < pending_token->advance_count; ++i) {
-                    lexer->advance(lexer, false);
+                    // Carriage returns are literally the only thing we mark
+                    // as whitespace in the entire grammar, because it's the
+                    // only kind of whitespace we deem semantically meaningless
+                    if (lexer->lookahead == CR) {
+                        lexer->advance(lexer, true);
+                    } else {
+                        lexer->advance(lexer, false);
+                    }
                 }
                 lexer->mark_end(lexer);
             }
@@ -484,185 +509,6 @@ static bool emit_from_backlog(
 
             return true;
         }
-    }
-
-    return false;
-}
-
-//////////////////////////////////////////////////////////////////////////////
-// SCANNING
-//////////////////////////////////////////////////////////////////////////////
-
-
-typedef struct {
-    bool preliminary_token_found;
-    TokenType preliminary_token;
-    uint8_t preliminary_indentation_depth;
-    uint16_t indentation_chars_found;
-    int32_t lookahead_at_line_start;
-} _SolParseState;
-
-
-static bool advance_to_maybe_node_end(
-        /* Node endings mark the end of an indented block -- ie, dedentation.
-        Note that these are **always** zero-width tokens, and there will **not**
-        be an initial NODE_CONTINUE here. Also note that we may emit multiple
-        node_ends for a single call, in case we're dedenting multiple
-        indentation levels, but that treesitter doesn't support this in a
-        scan pass. Therefore, we simply pop the corresponding node off of the
-        stack, and allow the next scan pass to retry parse_node_end. This is
-        perhaps somewhat wasteful, since we'll be parsing the indentation
-        multiple times when unwrapping multiple block indentation levels, but
-        it's also simple and robust.
-
-        NOTE THAT THIS CANNOT BE CALLED UNTIL AFTER AT LEAST ONE NODE_CONTINUE
-        HAS HAPPENED! The grammar is responsible for enforcing this, but if
-        the grammar is broken, well, this will get errors because of the
-        indentation char not being defined on the scanner.
-        */
-        TSLexer *lexer,
-        Scanner *scanner,
-        _SolParseState *parse_state
-) {
-    // Technically not possible, but maybe in an error condition? Better than
-    // a panic!
-    if (scanner->node_stack->size == 0) { return false; }
-    
-    uint8_t current_node_level = (
-        ((Node *)*array_back(scanner->node_stack))->node_level);
-    if (current_node_level == 0) { return false; }
-
-    // Keep in mind that we might be dedenting multiple levels, so this might
-    // be less than this
-    uint16_t max_indentation_char_count = (
-        scanner->indentation_char_repetitions * (current_node_level - 1));
-    uint16_t indentation_chars_found = parse_state->indentation_chars_found;
-
-    // The general strategy here is to keep advancing until we either hit the
-    // maximum number of characters we'd expect for a dedentation, or the EoF,
-    // or the first non-indentation character. Then we'll check to see how many
-    // indentation characters we consumed to decide if it's a plausible node
-    // end
-    while (
-        !lexer->eof(lexer)
-        && indentation_chars_found < max_indentation_char_count
-    ) {
-        if (lexer->lookahead == scanner->indentation_char) {
-            ++indentation_chars_found;
-            lexer->advance(lexer, false);
-        } else {
-            break;
-        }
-    }
-
-    // Note that node_ends are zero-width tokens on the NEXT LINE of the
-    // parse; therefore, they must always be zero-width, and we NEVER want to
-    // mark_end!
-    parse_state->indentation_chars_found = indentation_chars_found;
-
-    // We want to check here if the next lookahead character is the indentation
-    // character. If it is, we just want to advance, but we don't want to mark
-    // the end or set the found token
-    if (
-        // purely defensive; should never be greater than
-        indentation_chars_found >= max_indentation_char_count
-        && lexer->lookahead == scanner->indentation_char
-    ) { return false; }
-
-    // Note that, since we're working with integers, this will round towards
-    // 0, meaning that we'll automatically round down to the nearest FULL
-    // indentation level -- which is exactly what we want
-    parse_state->preliminary_indentation_depth = (
-        indentation_chars_found / scanner->indentation_char_repetitions);
-    parse_state->preliminary_token_found = true;
-    parse_state->preliminary_token = NODE_END;
-    return true;
-}
-
-
-static bool advance_to_maybe_node_continue(
-        /* Node continuations appear at the beginning of every line where the
-        indentation level does not change. Note that this does not include,
-        for example, the leading bit of a node_begin -- if a line includes an
-        increase in the indentation level, then the ENTIRE indentation for that
-        line will be marked as a node_begin.
-        */
-        TSLexer *lexer,
-        Scanner *scanner,
-        _SolParseState *parse_state
-) {
-    // This handles node continues at L0 indentation
-    if (
-        // Case 1: we've never encountered indentation in the file, ever
-        scanner->indentation_char_repetitions == 0
-        // Case 2: we have encountered it, but we've popped back out to L0
-        || scanner->node_stack->size == 0
-        // Case 3: we somehow got in a situation where document has a root
-        // node, but its depth is 0. This would imply changes to grammar.js
-        || ((Node *)*array_back(scanner->node_stack))->node_level == 0
-    ) {
-        // We want to make sure that the next character **is NOT** indentation;
-        // otherwise, it's not a valid node continue. That will either be a
-        // node_begin or an error state; either way, we don't want to mark a
-        // preliminary token. But assuming that's not the case, we can just
-        // continue on.
-        // If the next "character" is an EoF, then technically this is
-        // redundant with the emptyline handling, but we can be defensive and
-        // also not set the preliminary token in that case.
-        if (
-            !lexer->eof(lexer)
-            && !is_indentation_or_eol(lexer->lookahead)
-        ){
-            parse_state->preliminary_indentation_depth = 0;
-            parse_state->preliminary_token_found = true;
-            parse_state->preliminary_token = NODE_CONTINUE;
-            return true;
-        }
-
-    // ... and this handles all other indentation levels. Note that, by
-    // definition, this means we already know what the indentation info is,
-    // because defining it is done within parse_node_begin
-    } else {
-        uint16_t indentation_chars_found = parse_state->indentation_chars_found;
-        Node *current_node = *array_back(scanner->node_stack);
-
-        uint16_t max_indentation_char_count = (
-            current_node->node_level * scanner->indentation_char_repetitions);
-
-        // TODO: refactor into something reusable!
-        while (
-            !lexer->eof(lexer)
-            && indentation_chars_found < max_indentation_char_count
-        ) {
-            if (lexer->lookahead == scanner->indentation_char) {
-                ++indentation_chars_found;
-                lexer->advance(lexer, false);
-            } else {
-                break;
-            }
-        }
-
-        parse_state->indentation_chars_found = indentation_chars_found;
-
-        // We want to check here if the next lookahead character is the indentation
-        // character. If it isn't, we don't want to set the found token
-        if (
-            // IMPORTANT:
-            // Note the different termination condition -- we need to match
-            // this exactly!
-            indentation_chars_found != max_indentation_char_count
-            || (
-                // Note: if this is an embedded node, we don't care about extra
-                // indentation
-                !current_node->is_embed
-                && lexer->lookahead == scanner->indentation_char
-            )
-        ) { return false; }
-
-        parse_state->preliminary_indentation_depth = current_node->node_level;
-        parse_state->preliminary_token_found = true;
-        parse_state->preliminary_token = NODE_CONTINUE;
-        return true;
     }
 
     return false;
@@ -700,247 +546,180 @@ static bool _ensure_indent_info(
 }
 
 
-static bool advance_to_maybe_node_begin(
-        /* Node beginnings mark the start of an indented block, AFTER any
-        node metadata has been defined. Note that we will mark the entire
-        indentation whitespace (from line start onwards) of the line as a
-        NODE_BEGIN -- there will **not** be an initial NODE_CONTINUE.
+typedef struct {
+    uint16_t indentation_char_count;
+    uint16_t nih_whitespace_char_count;
+    uint8_t empty_line_eol_length;
+} SoLWhitespace;
+
+
+typedef enum {
+    SOL_NODE_CONTINUE,
+    SOL_NODE_BEGIN,
+    SOL_NODE_END,
+    SOL_IS_EOF
+} SoLNodeState;
+
+
+typedef struct {
+    SoLNodeState sol_node_state;
+    uint8_t level_delta;
+} SoLNodeStateClassification;
+
+
+static uint8_t detect_and_advance_through_eol(
+        /* This detects a newline (and any optional carriage returns)
+        and returns the number of characters consumed as part of it, or
+        0 if no EoL was found.
         */
-        TSLexer *lexer,
-        Scanner *scanner,
-        _SolParseState *parse_state
+        TSLexer *lexer
 ) {
-    if (_ensure_indent_info(scanner, parse_state->lookahead_at_line_start)) {
+    uint8_t charcount = 0;
 
-        bool is_embed;
-        uint8_t current_node_level;
-        if (scanner->node_stack->size > 0) {
-            Node *current_node = *array_back(scanner->node_stack);
-
-            // This should be obvious, but if we're embedded, we definitely don't
-            // want to be creating new nodes every time there's an indentation
-            if (current_node->is_embed) { 
-                printf("ret false for node begin\n");
-                return false; }
-
-            current_node_level = current_node->node_level;
-            is_embed = current_node->is_embed;
-        } else {
-            current_node_level = 0;
-            is_embed = false;
-        }
-
-        uint16_t indentation_chars_found = parse_state->indentation_chars_found;
-        uint16_t max_indentation_char_count = (
-            (current_node_level + 1) * scanner->indentation_char_repetitions);
-
-        // TODO: refactor into something reusable!
-        while (
-            !lexer->eof(lexer)
-            && indentation_chars_found < max_indentation_char_count
-        ) {
-            if (lexer->lookahead == scanner->indentation_char) {
-                ++indentation_chars_found;
-                lexer->advance(lexer, false);
-            } else {
-                break;
-            }
-        }
-
-        parse_state->indentation_chars_found = indentation_chars_found;
-
-        // We want to check here if the next lookahead character is the indentation
-        // character. If it isn't, we don't want to set the found token
-        if (
-            // IMPORTANT:
-            // Note, again, the different check condition here!
-            // purely defensive; should never be greater than
-            indentation_chars_found < max_indentation_char_count
-            || lexer->lookahead == scanner->indentation_char
-        ) { return false; }
-
-        parse_state->preliminary_indentation_depth = current_node_level + 1;
-        parse_state->preliminary_token_found = true;
-        parse_state->preliminary_token = NODE_BEGIN;
-        return true;
+    if (lexer->lookahead == CR) {
+        charcount += 1;
+        lexer->advance(lexer, true);
     }
-
-    // Wasn't an indentation character, so... can't be a node_begin!
-    return false;
-}
-
-
-static bool check_for_empty_line(
-        /* Empty lines can actually have meaning in cleancopy, since they
-        (generally, assuming the application implements it that way) denote
-        the boundaries between paragraphs. Ideally, we could parse these as
-        part of the grammar; however, three things conspire against us to
-        make it more pragmatic to parse them here in the scanner:
-        ++  We're doing lots of other whitespace shenanigans, and it's easy
-            to accidentally get into conflict situations
-        ++  The regex grammar doesn't support assertions (so we can't detect
-            being at the beginning of the line)
-        ++  we can't have zero-length matches, so we can't define an empty
-            line as a newline followed by 0 or more whitespace characters
-            followed by a newline
-        */
-        TSLexer *lexer,
-        Scanner *scanner,
-        _SolParseState *parse_state
-) {
-    while (
-        !lexer->eof(lexer)
-        && is_horizontal_whitespace(lexer->lookahead)
-    ) {
+    if (lexer->lookahead == NEWLINE) {
+        charcount += 1;
         lexer->advance(lexer, false);
     }
-
-    // Status check: we started at the beginning of the line and advanced
-    // through ONLY whitespace characters either until we reached the EoF
-    // or until we found the first character that wasn't horizontal whitespace.
-    // Therefore, if the next character is a newline (or EoF), then we know
-    // the whole line was empty, and we should preempt all of the rest of the
-    // start-of-line whitespace processing.
-    // Note that we don't want to consume a newline; that's handled within the
-    // EoL parser (or injected by the EoF parser as a zero-width token).
-    if (lexer->lookahead == NEWLINE || lexer->eof(lexer)) {
-        return true;
-    }
-
-    return false;
+    return charcount;
 }
 
 
-static void handle_start_of_line(
-        /* We have several different tokens that are all valid at the
-        start of the line, and all need to know exactly how much
-        whitespace exists from the beginning of the line. However, we
-        only have 1 codepoint of lookahead to deal with, **and** we
-        can't rewind the lexer state to a previous codepoint. That means
-        that we have an extra layer of ambiguity, especially surrounding
-        empty lines -- which might be either shorter or longer than the
-        other possible tokens, but are always valid at the same time --
-        that we need to handle. And that's what this function does!
+static SoLWhitespace *advance_through_empty_lines(
+        /* This advances through the lexer lookahead until we come to
+        the first non-empty line. It pushes an SoLWhitespace struct
+        onto the passed empty_lines array for every empty line
+        encountered, and returns the SoLWhitespace for the first
+        non-empty line.
 
-        Oh yeah, to further complicate things, don't forget that we can
-        only mark the end of the consumed token at the current position
-        of the lexer -- we can't rewind that, either!
-
-        Note that EoF node closing is handled within the dedicated EoF
-        parser, ie, ^^NOT here.^^
+        Note that, if we encounter the EoF, we'll still return an
+        SoLWhitespace!
         */
         TSLexer *lexer,
         Scanner *scanner,
-        ScanState *scan_state
+        Array(SoLWhitespace *) * empty_lines
 ) {
-    // This should be obvious, but if we aren't at the beginning of the line,
-    // these aren't the droids you're looking for. This should be redundant
-    // WRT the grammar, but the interplay between the different moving parts
-    // can be a little hard to reason about
-    if (
-        lexer->get_column(lexer) != 0
-        || lexer->eof(lexer)
-    ) { return; }
+    uint16_t indentation_char_count = 0;
+    uint16_t nih_whitespace_char_count = 0;
 
-    _SolParseState *parse_state = ts_malloc(sizeof(_SolParseState));
-    parse_state->preliminary_token_found = false;
-    parse_state->preliminary_indentation_depth = 0;
-    parse_state->indentation_chars_found = 0;
-    parse_state->lookahead_at_line_start = lexer->lookahead;
+    while (!lexer->eof(lexer)) {
+        // If we've never encountered indentation in the file, ever, AND the
+        // next character isn't indentation, then we can skip indentation
+        // checking and just do empty line checks
+        if (_ensure_indent_info(scanner, lexer->lookahead)){
+            while (
+                !lexer->eof(lexer)
+                && lexer->lookahead == scanner->indentation_char
+            ) {
+                indentation_char_count += 1;
+                lexer->advance(lexer, false);}
+        }
+        while (
+            !lexer->eof(lexer)
+            && is_horizontal_whitespace(lexer->lookahead)
+        ) {
+            nih_whitespace_char_count += 1;
+            lexer->advance(lexer, false);
+        }
 
-    // NOTE: order matters here! We need to go in order from least to most
-    // indentation.
-    if (scan_state->valid_symbols[NODE_END]) {
-        advance_to_maybe_node_end(lexer, scanner, parse_state);
-    }
-    if (scan_state->valid_symbols[NODE_CONTINUE]) {
-        advance_to_maybe_node_continue(lexer, scanner, parse_state);
-    }
-    if (scan_state->valid_symbols[NODE_BEGIN]) {
-        advance_to_maybe_node_begin(lexer, scanner, parse_state);
-    }
+        // Note: we don't want to add an extra empty line if we hit EoF. That
+        // gets detected in the caller and simply added to empty_lines
+        uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer);
+        if (maybe_eol_characters){
+            SoLWhitespace *empty_line = ts_malloc(sizeof(SoLWhitespace));
+            empty_line->indentation_char_count = indentation_char_count;
+            empty_line->nih_whitespace_char_count = nih_whitespace_char_count;
+            empty_line->empty_line_eol_length = maybe_eol_characters;
+            array_push(empty_lines, empty_line);
+            indentation_char_count = 0;
+            nih_whitespace_char_count = 0;
 
-    // Note that, based on our grammar, indentation (used to find
-    // node_continue) isn't the same as horizontal whitespace (used to find
-    // empty lines), so we need to call mark_end BEFORE checking for an empty
-    // line if we found a preliminary NODE_CONTINUE, so that we keep its
-    // position in case of non-indentation whitespace that doesn't last until
-    // the end of the line.
-    // Important: this depends upon node_continue checking for
-    // whitespace ahead of the last lookahead character. Otherwise,
-    // you could accidentally have consumed more whitespace during
-    // check_for_empty_line, and get into an error state.
-    if (
-        parse_state->preliminary_token_found
-        && parse_state->preliminary_token == NODE_CONTINUE
-    ) {
-        consume_advances_from_lexer(lexer, scan_state, false);
-    }
-
-    // We may or may not have found a preliminary token, but we still need to
-    // check to see if the whole line is empty, since this could have more
-    // (or less!) whitespace than any of the above.
-    if (
-        scan_state->valid_symbols[EMPTY_LINE]
-        && check_for_empty_line(lexer, scanner, parse_state)
-    ){
-        // Early return here, to override the preliminary token found. Also
-        // be sure to mark the end, so that we advance until the start of the
-        // next line, and don't get stuck in an infinite loop. DO NOT schedule
-        // the newline here, even if at EoF -- let the EoF handler do that!
-        consume_advances_from_lexer(lexer, scan_state, true);
-        schedule_token(
-            scanner,
-            scan_state,
-            EMPTY_LINE,
-            scan_state->lexer_last_marked_col - scan_state->lexer_col_at_start,
-            true);
-
-    // No empty line. If we found any other token, we might have some
-    // additional bookkeeping to do before scheduling it.
-    } else if (parse_state->preliminary_token_found) {
-        // Schedule the relevant token first, do the bookkeeping afterwards.
-        // This allows us to emit, for example, the FLAG_EMBED **after** the
-        // NODE_BEGIN, which makes the grammar simpler.
-        // Note: we consumed advances for the NODE_CONTINUE already!
-        schedule_token(
-            scanner,
-            scan_state,
-            parse_state->preliminary_token,
-            scan_state->lexer_last_marked_col - scan_state->lexer_col_at_start,
-            true);
-
-        // We need to be really careful that these are ALWAYS emitted at the
-        // EoF, regardless of what happens, so we handle these separately.
-        if (parse_state->preliminary_token == NODE_END) {
-            assert(scanner->node_stack->size > 0);
-            Node *node_to_end = array_pop(scanner->node_stack);
-            // We'll need a helper at some point to close out any misc richtext
-            // formatting that might be open still; that will go right here
-            ts_free(node_to_end);
-
-        // For all other zero-width tokens, however, we need to make sure that
-        // we haven't already processed the EoF, lest we get stuck in an
-        // infinite loop of mismatched expectations between scanner and parser
-        } else if (parse_state->preliminary_token == NODE_BEGIN) {
-            push_node(
-                scanner,
-                parse_state->preliminary_indentation_depth,
-                scanner->pending_embed_node);
-
-            // We may have previously detected a metadata assignment for an
-            // __embed__ node, which means we need to now, finally, schedule
-            // the delayed token for it
-            if (scanner->pending_embed_node) {
-                schedule_token(scanner, scan_state, FLAG_EMBED, 0, true);
-            }
-
-            scanner->pending_embed_node = false;
+        // Keep in mind that we're only advancing through horizontal whitespace
+        // here. So by definition, if the next character isn't a newline or the
+        // EoF, then it's no longer an empty line.
+        } else {
+            break;
         }
     }
 
-    ts_free(parse_state);
+    SoLWhitespace *nonempty_line = ts_malloc(sizeof(SoLWhitespace));
+    nonempty_line->indentation_char_count = indentation_char_count;
+    nonempty_line->nih_whitespace_char_count = nih_whitespace_char_count;
+    nonempty_line->empty_line_eol_length = 0;
+    return nonempty_line;
 }
+
+
+static SoLNodeStateClassification classify_sol_node_state(
+        /* Determines if the StartOfLine is a NODE_CONTINUE, NODE_BEGIN,
+        or NODE_END. Keep in mind that we have more to consider than
+        ^^just^^ the indentation level -- specifically, lists and embeds.
+        */
+        Scanner *scanner,
+        Node *active_node,
+        SoLWhitespace *first_nonempty_line
+) {
+    // Note: towards-zero rounding, but this is unsigned, so im endeffekt,
+    // this is floor division
+    uint8_t indentation_level_found;
+    uint8_t active_node_level;
+    bool is_embed;
+    uint8_t maybe_indentation_char_repetitions = (
+        scanner->indentation_char_repetitions);
+    // Note that this gets called literally on the first line, which means
+    // it'll be a minute (until the first indent) until we know how big an
+    // indentation is. But good news: in that case, we don't care!
+    if (maybe_indentation_char_repetitions) {
+        indentation_level_found = (
+            first_nonempty_line->indentation_char_count
+            / maybe_indentation_char_repetitions);
+    } else {
+        indentation_level_found = 0;
+    }
+
+    if (active_node == NULL) {
+        active_node_level = 0;
+        is_embed = false;
+    } else {
+        active_node_level = active_node->node_level;
+        is_embed = active_node->is_embed;
+    }
+
+    if (is_embed) {
+        // This is maximally permissive; the extra whitespace will be converted
+        // into embed content
+        if (indentation_level_found >= active_node_level) {
+            return (SoLNodeStateClassification){SOL_NODE_CONTINUE, 0};
+        } else {
+            return (SoLNodeStateClassification){
+                SOL_NODE_END, active_node_level - indentation_level_found};
+        }
+
+    } else {
+        if (indentation_level_found > active_node_level) {
+            return (SoLNodeStateClassification){SOL_NODE_BEGIN, 1};
+
+        // This is deliberately going to match even if there's a partial indent
+        // **less than** the required amount for a node_begin;
+        // peek_and_schedule_sol will only consume the correct amount of
+        // indentation, and the rest will be turned into an error in the parser
+        } else if (indentation_level_found == active_node_level) {
+            return (SoLNodeStateClassification){SOL_NODE_CONTINUE, 0};
+
+        } else {
+            return (SoLNodeStateClassification){
+                SOL_NODE_END, active_node_level - indentation_level_found};
+        }
+    }
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+// SCANNING
+//////////////////////////////////////////////////////////////////////////////
 
 
 static void handle_eof(
@@ -959,82 +738,261 @@ static void handle_eof(
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    // We use this in exactly one place: in the EoL handler, if we -- as the
-    // name suggests -- find the EoF immediately after the EoL. In that case,
-    // we emit the EoL, **but hold off on the empty line** so that it can be
-    // reordered after closing stuff. However, in all other cases, we need to
-    // close out the current line first.
-    if (!scanner->eof_detected_immediately_after_eol){
-        schedule_token(scanner, scan_state, EOL, 0, true);
-    }
+    // This prevents infinite loops by marking handle_eof as already called.
+    // It also prevents accidentally calling handle_eof twice after processing
+    // an empty line immediately preceeding the EoF.
+    scanner->post_eof = true;
 
     // If you decide you want to make empty lines part of the parent block
     // instead of the child block, you can simply slide this before the above
     // EoF empty-and/or-EoL block
     if (scanner->node_stack->size > 0) {
-        uint8_t current_indentation_level = (
+        uint8_t current_node_level = (
             ((Node *)*array_back(scanner->node_stack))->node_level);
 
-        while (current_indentation_level > 0) {
-            Node *node_to_end = array_pop(scanner->node_stack);
-            assert(node_to_end->node_level == current_indentation_level);
+        for (
+            uint8_t node_index = 0;
+            node_index < current_node_level;
+            ++node_index
+        ) {
+            printf("... scheduling node end from EoF\n");
             schedule_token(scanner, scan_state, NODE_END, 0, true);
-            ts_free(node_to_end);
-            current_indentation_level -= 1;
         }
-    }
-
-    assert(scanner->node_stack->size == 0);
-
-    // There are 3 ways an EoF can be spelled:
-    // ++  abruptly, at the end of a line with content
-    // ++  the traditional way, with an empty line
-    // ++  the "it looks traditional but it isn't" way, with one last line
-    //     full just of whitespace
-    // The first case doesn't need an empty line, just an EoL.
-    // The second case needs an empty line + EoL. This is detected by the
-    // EoL handler ^^for the previous EoL^^, and the empty line token is
-    // scheduled there. So in that case, we just need an EoL.
-    // The third case gets the empty line from the start-of-line handler, and
-    // then a newline from here.
-    // Note: lexer->get_column **always returns 0 at EoF!**
-    if (scanner->eof_detected_immediately_after_eol) {
-        schedule_token(scanner, scan_state, EMPTY_LINE, 0, true);
-        schedule_token(scanner, scan_state, EOL, 0, true);
     }
 }
 
 
-static void detect_and_schedule_eol(
-        /* We need to parse the EoL externally for two reasons: first of
-        all, the interplay with empty lines -- which might be a
-        zero-length token between two newlines -- is very tricky.
-        Second, we need to detect in advance if an EoF immediately follows
-        an EoL, indicating a trailing empty line.
+static void peek_and_schedule_start_of_line(
+        /* The challenge, should you choose to accept it, is:
+        ++  treesitter only gives us a single character of lookahead
+        ++  we can't rewind
+        ++  we can't retry/replay/redo stuff, without altering the state
+            of treesitter's internals
+        ++  we have a mix of zero-length and consuming tokens at the
+            start of the line
+        ++  we need to defer emitting empty line tokens (Which can be
+            consuming or zero-length) until after we know what comes
+            after the empty line
+
+        Additionally:
+        ++  the lexer always returns a column of 0 at EoF
+        ++  start-of-line handling gets skipped at EoF
+
+        This challenge seems insurmountable, ^^except:^^ instead of
+        doing this at the beginning of the line (like a sane
+        architecture would allow), we can do it after scheduling the
+        EOL token ^^at the end of the preceeding line.^^ This lets us
+        consume the 1-character newline, and then do as much
+        non-mutating lookahead as we want. Then, we rely on the backlog
+        to re-consume the lookahead.
+
+        It's a little awkward, yes, but it works! And it affords us a
+        lot of flexibility in handling the start of the line, without
+        a bunch of hacky workarounds for treesitter. Well, other than
+        the hacky workaround of parsing the next line at the end of
+        the preceeding one.
         */
         TSLexer *lexer,
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    if (lexer->lookahead == NEWLINE) {
+    Array(SoLWhitespace *) * empty_lines = ts_malloc(
+        sizeof(Array(SoLWhitespace *)));
+    array_init(empty_lines);
+    // Default to SOL_NODE_CONTINUE; this only gets used where no indentation
+    // was found at all, which can only be zeroth level node continuation
+    SoLNodeState sol_node_state = SOL_NODE_CONTINUE;
+    Node *active_node = NULL;
+    if (scanner->node_stack->size > 0) {
+        active_node = (Node *)*array_back(scanner->node_stack);
+    }
+    uint8_t level_delta = 0;
+
+    // If we've never encountered indentation in the file, ever, AND the next
+    // character isn't indentation, then we can skip indentation checking
+    // and just do empty line checks
+    SoLWhitespace *first_nonempty_line = advance_through_empty_lines(
+        lexer, scanner, empty_lines);
+
+    // Note that if we hit this, that means the first non-empty line... was,
+    // in fact, actually empty, because it terminated in the EoF. Which means
+    // we need an extra empty line, but not until after we handle the rest
+    // of the empty lines
+    if (lexer->eof(lexer)){
+        handle_eof(lexer, scanner, scan_state, true);
+        sol_node_state = SOL_IS_EOF;
+        array_push(empty_lines, first_nonempty_line);
+
+    // Note that classify_sol_node_state is perfectly capable of handling a
+    // null active_node!
+    } else {
+        // These can't do anything more than detection, because we might need
+        // to reorder some empty lines first
+        // Note that these aren't completely trivial because we have embeddings
+        // and lists to worry about
+        SoLNodeStateClassification classification = classify_sol_node_state(
+            scanner, active_node, first_nonempty_line);
+
+        sol_node_state = classification.sol_node_state;
+        level_delta = classification.level_delta;
+    }
+
+    // Empty lines go AFTER a node_end, including implicit ones at EoF
+    if (sol_node_state == SOL_NODE_END || sol_node_state == SOL_IS_EOF) {
+        for (
+            uint8_t node_ends_scheduled = 0;
+            node_ends_scheduled < level_delta;
+            ++node_ends_scheduled
+        ) {
+            schedule_token(scanner, scan_state, NODE_END, 0, true);
+        }
+
+        for (
+            uint8_t empty_line_index = 0;
+            empty_line_index < empty_lines->size;
+            ++empty_line_index
+        ) {
+            SoLWhitespace *empty_line = *array_get(
+                empty_lines, empty_line_index);
+            uint16_t empty_line_length = (
+                empty_line->indentation_char_count
+                + empty_line->nih_whitespace_char_count);
+            schedule_token(
+                scanner,
+                scan_state,
+                EMPTY_LINE,
+                empty_line_length,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                EOL,
+                empty_line->empty_line_eol_length,
+                false);
+            ts_free(empty_line);
+        }
+
+        // If the SoL is the EoF, we want to have an empty line, which doesn't
+        // get a node_continue. But otherwise, we can (and should!) already
+        // queue up the next node_continue
+        if (sol_node_state != SOL_IS_EOF) {
+            uint8_t post_dedent_node_level = (
+                first_nonempty_line->indentation_char_count
+                / scanner->indentation_char_repetitions);
+
+            schedule_token(
+                scanner,
+                scan_state,
+                NODE_CONTINUE,
+                // Yes, this looks redundant -- but it isn't. We're actually
+                // rounding it to the whole indentation level, so we don't
+                // consume too much whitespace if there's a partial indentation
+                post_dedent_node_level * scanner->indentation_char_repetitions,
+                false);
+        }
+
+    // Empty lines go BEFORE node_continue and node_begin
+    } else {
+        for (
+            uint8_t empty_line_index = 0;
+            empty_line_index < empty_lines->size;
+            ++empty_line_index
+        ) {
+            SoLWhitespace *empty_line = *array_get(
+                empty_lines, empty_line_index);
+            uint16_t empty_line_length = (
+                empty_line->indentation_char_count
+                + empty_line->nih_whitespace_char_count);
+            schedule_token(
+                scanner,
+                scan_state,
+                EMPTY_LINE,
+                empty_line_length,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                EOL,
+                empty_line->empty_line_eol_length,
+                false);
+            ts_free(empty_line);
+        }
+
+        // Note: NOT the same as the first_nonempty_line, because we might have
+        // an erroneously long indentation (or be within an embedding)
+        uint16_t np1_indentation_chars;
+        uint16_t n_indentation_chars;
+        if (active_node == NULL) {
+            n_indentation_chars = 0;
+            np1_indentation_chars = scanner->indentation_char_repetitions;
+        } else {
+            n_indentation_chars = (
+                active_node->node_level * scanner->indentation_char_repetitions);
+            np1_indentation_chars = (
+                n_indentation_chars + scanner->indentation_char_repetitions);
+        }
+
+        // If it's a node_begin, we can also schedule the node_continue from
+        // the beginning of the line
+        if (sol_node_state == SOL_NODE_BEGIN) {
+            schedule_token(scanner, scan_state, NODE_BEGIN, 0, true);
+
+            if (scanner->pending_embed_node) {
+                schedule_token(scanner, scan_state, FLAG_EMBED, 0, true);
+            }
+
+            schedule_token(
+                scanner,
+                scan_state,
+                NODE_CONTINUE,
+                np1_indentation_chars,
+                false);
+
+        } else {
+            schedule_token(
+                scanner,
+                scan_state,
+                NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+        }
+    }
+
+    array_delete(empty_lines);
+}
+
+
+static void detect_and_schedule_eol(
+        /* We need to parse the EoL externally for three reasons:
+        1.. the interplay with empty lines -- which might be a
+            zero-length token between two newlines -- is very tricky.
+        2.. we need to detect in advance if an EoF immediately follows
+            an EoL, indicating a trailing empty line for the entire file
+        3.. since we can't backtrack at the start of the line, and we need
+            to parse empty lines until we see the first content line (to
+            decide in which order the empty line should be scheduled -- for
+            example, before a node_continue but after a node_end), we need a
+            way to advance the lookahead without consuming characters. we can
+            do that as part of the EoL, at the small cost of forcing us to
+            re-advance when we need to emit the actual tokens
+
+        TODO: this needs to deal with optional carriage returns!
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer);
+    if (maybe_eol_characters) {
         // NOTE: we actually **need** to advance here, because we need to
         // check for the immediately following EoF immediately after
         // scheduling!
-        lexer->advance(lexer, false);
         consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(scanner, scan_state, EOL, 1, true);
+        schedule_token(scanner, scan_state, EOL, maybe_eol_characters, true);
 
-        // Note:
-        // ++  the EoF handler can't read backwards
-        // ++  the lexer always returns a column of 0 at EoF
-        // ++  start-of-line handling gets skipped at EoF
-        // Therefore, we need to store this on the scanner, so that it knows
-        // to emit an empty line (but we don't want to schedule it here,
-        // because the EoF handler can reorder it with respect to other
-        // zero-width tokens, ex node_ends)
-        if (lexer->eof(lexer)) {
-            scanner->eof_detected_immediately_after_eol = true;
-        }
+        printf("... peeking ahead; don't mind me!\n");
+        // The docstring for peek_and_schedule_SoL explains this thoroughly
+        peek_and_schedule_start_of_line(lexer, scanner, scan_state);
     }
 }
 
@@ -1179,15 +1137,12 @@ bool tree_sitter_cleancopy_external_scanner_scan(
 
     } else {
 
-        // Just because we're at the EoF, doesn't mean we're out of tokens.
-        // We still have a number of possible zero-width tokens. However, we need
-        // to be REALLY careful here, or we'll end up in an infinite loop at the
-        // end of parsing. This is our last chance to schedule any remaining
-        // tokens; we can't come back to this block without having an infinite
-        // loop at the EoF.
+        // If we hit the EoF after an empty line, this will be handled via
+        // peek_and_schedule_start_of_line. If we hit the EoF at the end of
+        // a normal line, we need to handle it here.
         if (lexer->eof(lexer)) {
-            scanner->post_eof = true;
-            handle_eof(lexer, scanner, scan_state);
+            schedule_token(scanner, scan_state, EOL, 0, true);
+            handle_eof(lexer, scanner, scan_state, false);
 
         // But do note that if we're at the EoF, all other tokens are invalid, and
         // should be skipped (to help avoid errors and weird states)
@@ -1203,8 +1158,11 @@ bool tree_sitter_cleancopy_external_scanner_scan(
 
             // The start-of-line handler always needs to be called first, since
             // it's dependent on being, well, at the start of the line.
+            // Note that, except at the very beginning of the document (as in,
+            // literally the first line) this is tacked on to the EoL handling
+            // for the previous line
             if (can_parse(scan_state, SOL_SYMBOLS)) {
-                handle_start_of_line(lexer, scanner, scan_state);}
+                peek_and_schedule_start_of_line(lexer, scanner, scan_state);}
             // The actual empty node symbol is handled by the treesitter-internal
             // lexer, but we need to do some state cleanup (to remove the pending
             // node info from the scanner).
