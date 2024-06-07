@@ -1,8 +1,9 @@
+#include <assert.h>
+#include <stdio.h>
 #include "tree_sitter/parser.h"
 #include "tree_sitter/alloc.h"
 #include "tree_sitter/array.h"
-#include <assert.h>
-#include <stdio.h>
+#include "cleancopy_chars.h"
 
 // The member order must match the ``externals`` array in ``grammar.js`` but
 // the names are irrelevant
@@ -59,50 +60,16 @@ const TokenType SOL_SYMBOLS[] = {
 //////////////////////////////////////////////////////////////////////////////
 // STRING/UNICODE HELPERS
 //////////////////////////////////////////////////////////////////////////////
-static const int32_t SPACE_CHAR[] = {
-    // See https://www.fileformat.info/info/unicode/category/Zs/list.htm
-    0x0020,
-    0x00A0,
-    0x1680,
-    0x2000,
-    0x2001,
-    0x2002,
-    0x2003,
-    0x2004,
-    0x2005,
-    0x2006,
-    0x2007,
-    0x2008,
-    0x2009,
-    0x200A,
-    0x202F,
-    0x205F,
-    0x3000,};
-static const int32_t TAB_CHAR[] = {
-    0x0009,};
-static const int32_t NEWLINE = 0x000A;
-static const int32_t CR = 0x000D;
-static const int32_t ZWSP = 0x200B;
-static const int32_t ZWNBSP = 0xFEFF;
-static const int32_t NODEDEF_SYMBOL = 0x003E;
-static const int32_t EMPTY_NODE_SYMBOL = 0x003C;
-
-static const int32_t EMBED_MAGIC[] = {  // __embed__
-    0x005F, 0x005F,
-    0x0065, 0x006D, 0x0062, 0x0065, 0x0064,
-    0x005F, 0x005F,};
-static const int32_t METADATA_ASSIGNMENT_SYMBOL = 0x003A;
-
 
 static bool is_space(
         int32_t lookahead
 ) {
     for (
         size_t i = 0;
-        i < (sizeof(SPACE_CHAR) / sizeof(SPACE_CHAR[0]));
+        i < (sizeof(UNICHR_SPACE_CHAR) / sizeof(UNICHR_SPACE_CHAR[0]));
         ++i
     ) {
-        if (SPACE_CHAR[i] == lookahead) {
+        if (UNICHR_SPACE_CHAR[i] == lookahead) {
             return true;
         }
     }
@@ -116,10 +83,10 @@ static bool is_tab(
 ) {
     for (
         size_t i = 0;
-        i < (sizeof(TAB_CHAR) / sizeof(TAB_CHAR[0]));
+        i < (sizeof(UNICHR_TAB_CHAR) / sizeof(UNICHR_TAB_CHAR[0]));
         ++i
     ) {
-        if (TAB_CHAR[i] == lookahead) {
+        if (UNICHR_TAB_CHAR[i] == lookahead) {
             return true;
         }
     }
@@ -134,15 +101,15 @@ static bool is_horizontal_whitespace(
     return (
         is_space(lookahead)
         || is_tab(lookahead)
-        || (lookahead == ZWNBSP)
-        || (lookahead == ZWSP));
+        || (lookahead == UNICHR_ZWNBSP)
+        || (lookahead == UNICHR_ZWSP));
 }
 
 
 static bool is_indentation_or_eol(
         int32_t lookahead
 ) {
-    return lookahead == NEWLINE || is_space(lookahead) || is_tab(lookahead);
+    return lookahead == UNICHR_NEWLINE || is_space(lookahead) || is_tab(lookahead);
 }
 
 
@@ -221,6 +188,10 @@ void *tree_sitter_cleancopy_external_scanner_create(
 ) {
     // printf("##### PARSE START #####\n\n");
     Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
+
+    assert(char_within(&UNIRAN_DIGIT, '0'));
+    assert(char_within(&UNIRAN_LETTER, 't'));
+    assert(char_within(&UNIRAN_LETTER_MODIFIER, 0x300));
 
     // This is how you create an empty array
     // hmm, this emits a compiler warning because the Array(Node *) is used as
@@ -492,7 +463,7 @@ static bool emit_from_backlog(
                     // Carriage returns are literally the only thing we mark
                     // as whitespace in the entire grammar, because it's the
                     // only kind of whitespace we deem semantically meaningless
-                    if (lexer->lookahead == CR) {
+                    if (lexer->lookahead == UNICHR_CR) {
                         lexer->advance(lexer, true);
                     } else {
                         lexer->advance(lexer, false);
@@ -576,11 +547,11 @@ static uint8_t detect_and_advance_through_eol(
 ) {
     uint8_t charcount = 0;
 
-    if (lexer->lookahead == CR) {
+    if (lexer->lookahead == UNICHR_CR) {
         charcount += 1;
         lexer->advance(lexer, true);
     }
-    if (lexer->lookahead == NEWLINE) {
+    if (lexer->lookahead == UNICHR_NEWLINE) {
         charcount += 1;
         lexer->advance(lexer, false);
     }
@@ -1015,7 +986,7 @@ static void detect_and_schedule_node_def(
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    if (lexer->lookahead == NODEDEF_SYMBOL) {
+    if (lexer->lookahead == UNICHR_NODEDEF_SYMBOL) {
         schedule_token(scanner, scan_state, NODE_DEF, 1, false);
     }
 }
@@ -1034,7 +1005,7 @@ static void detect_and_schedule_empty_node(
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    if (lexer->lookahead == EMPTY_NODE_SYMBOL) {
+    if (lexer->lookahead == UNICHR_EMPTY_NODE_SYMBOL) {
         scanner->pending_embed_node = false;
         schedule_token(scanner, scan_state, NODE_EMPTY, 1, false);
     }
@@ -1053,17 +1024,17 @@ static void mark_if_pending_embedding(
 ) {
     for (
         size_t i = 0;
-        i < (sizeof(EMBED_MAGIC) / sizeof(EMBED_MAGIC[0]));
+        i < (sizeof(UNICHR_EMBED_MAGIC) / sizeof(UNICHR_EMBED_MAGIC[0]));
         ++i
     ) {
         printf("checking char %d\n", i);
-        if (lexer->lookahead != EMBED_MAGIC[i]) {
+        if (lexer->lookahead != UNICHR_EMBED_MAGIC[i]) {
             printf("no embed found\n");
             return; }
         lexer->advance(lexer, false);
     }
 
-    if (lexer->lookahead == METADATA_ASSIGNMENT_SYMBOL) {
+    if (lexer->lookahead == UNICHR_METADATA_ASSIGNMENT_SYMBOL) {
         printf("embed found\n");
         scanner->pending_embed_node = true;
     }
