@@ -4,6 +4,7 @@
 #include "tree_sitter/alloc.h"
 #include "tree_sitter/array.h"
 #include "cleancopy_chars.h"
+#include "cleancopy_utils.h"
 
 // The member order must match the ``externals`` array in ``grammar.js`` but
 // the names are irrelevant
@@ -247,7 +248,7 @@ size_t _SCANNER_FIELD_LENGTHS[] = {
 void *tree_sitter_cleancopy_external_scanner_create(
         void
 ) {
-    // printf("##### PARSE START #####\n\n");
+    debug("##### PARSE START #####\n\n");
     Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
 
     assert(!CHAR_WITHIN(UNIRAN_DIGIT, ' '));
@@ -302,7 +303,7 @@ void tree_sitter_cleancopy_external_scanner_destroy(
     array_delete(scanner->token_backlog);
 
     ts_free(scanner);
-    // printf("\n\n##### PARSE END #####\n");
+    debug("\n\n##### PARSE END #####\n");
 }
 
 
@@ -450,7 +451,7 @@ static void emit_token(
         TokenType token
 ) {
     assert(lexer->result_symbol == 0);
-    printf("... emitting %s\n", _TokenNames[token]);
+    debug("... emitting %s\n", _TokenNames[token]);
     lexer->result_symbol = token;
 
     if (token == NODE_BEGIN) {
@@ -511,7 +512,7 @@ static bool emit_from_backlog(
             // that case... well, we can just return the wrong token, I guess,
             // and let tree sitter deal with its own mess
             if (!valid_symbols[pending_token->token]) {
-                printf(
+                debug(
                     "!!! backlog token not valid at position (%s); forcing "
                     "backtrack\n",
                     _TokenNames[pending_token->token]);
@@ -790,7 +791,7 @@ static void handle_eof(
             node_index < current_node_level;
             ++node_index
         ) {
-            printf("... scheduling node end from EoF\n");
+            debug("... scheduling node end from EoF\n");
             schedule_token(scanner, scan_state, NODE_END, 0, true);
         }
     }
@@ -1025,7 +1026,7 @@ static void detect_and_schedule_eol(
         consume_advances_from_lexer(lexer, scan_state, false);
         schedule_token(scanner, scan_state, EOL, maybe_eol_characters, true);
 
-        printf("... peeking ahead; don't mind me!\n");
+        debug("... peeking ahead; don't mind me!\n");
         // The docstring for peek_and_schedule_SoL explains this thoroughly
         peek_and_schedule_start_of_line(lexer, scanner, scan_state);
     }
@@ -1159,10 +1160,10 @@ static void detect_and_schedule_node_metadata_key(
         charcount == COUNT_OF(UNICHR_EMBED_MAGIC)
         && embed_magic_comparison_sum == COUNT_OF(UNICHR_EMBED_MAGIC)
     ) {
-        printf("... pending embed node detected!\n");
+        debug("... pending embed node detected!\n");
         scanner->pending_embed_node = true;
     } else {
-        printf("... NO pending embed node detected! %d, %d\n",
+        debug("... NO pending embed node detected!\n",
             charcount, embed_magic_comparison_sum);
     }
 
@@ -1211,11 +1212,11 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     // NOTE: if you see an infinite loop during parsing, and this line isn't up
     // top, THIS MIGHT BE THE CAUSE!
     if (valid_symbols[_ERROR_SENTINEL]) { 
-        printf("!!! ERROR SENTINEL!\n");
+        debug("!!! ERROR SENTINEL!\n");
         return false; }
 
     if (emit_from_backlog(lexer, scanner, valid_symbols)) {
-        printf("<<< from backlog!\n");
+        debug("<<< from backlog!\n");
         return true; }
 
     ScanState *scan_state = ts_malloc(sizeof(ScanState));
@@ -1248,13 +1249,13 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         // But do note that if we're at the EoF, all other tokens are invalid, and
         // should be skipped (to help avoid errors and weird states)
         } else {
-            // printf("--- checkpoint1. valid symbols:\n");
+            // debug("--- checkpoint1. valid symbols:\n");
             // for (
             //     size_t i = _ERROR_SENTINEL;
             //     i <= AUTOCLOSE_WARNING;
             //     i++
             // ) {
-            //     printf("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
+            //     debug("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
             // }
 
             // The start-of-line handler always needs to be called first, since
@@ -1388,12 +1389,6 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
         buffer_offset += pending_token_size;
     }
 
-    // printf(">>> ser backlog size %d\n", scanner->token_backlog->size);
-    // printf(">>> ser post_eof %d\n", scanner->post_eof);
-    // for (int i = 0; i < buffer_offset; i++) {
-    //     printf("%x", buffer[i]);
-    // }
-    // printf("\n\n");
     return buffer_offset;
 }
 
@@ -1490,11 +1485,4 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
     // deserialization.
     assert(buffer_offset == length);
     assert(backlog_end == length);
-    // printf("\n\n");
-    // printf(">>> deser backlog size %d\n", scanner->token_backlog->size);
-    // printf(">>> deser post_eof %d\n", scanner->post_eof);
-    // for (int i = 0; i < buffer_offset; i++) {
-    //     printf("%x", buffer[i]);
-    // }
-    // printf("\n");
 }
