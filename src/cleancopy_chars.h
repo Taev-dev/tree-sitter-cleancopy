@@ -1,16 +1,15 @@
 typedef struct {
   int32_t start;
   int32_t end;
-} _UnicodeCharacterRange;
-
-
-typedef struct {
-    unsigned count;
-    _UnicodeCharacterRange sorted_character_ranges[];
-} UnicodeCharacterGroup;
+} UnicodeCharacterRange;
 
 
 #define COUNT_OF(x) ((sizeof(x)/sizeof(0[x])) / ((size_t)(!(sizeof(x) % sizeof(0[x])))))
+
+
+//////////////////////////////////////////////////////////////////////////////
+// UNICODE CHARACTER GROUPS / CONSTANTS
+//////////////////////////////////////////////////////////////////////////////
 
 
 const int32_t UNICHR_SPACE_CHAR[] = {
@@ -56,7 +55,7 @@ const int32_t UNICHR_ASTERISK = '*';
 const int32_t UNICHR_TILDE = '~';
 
 
-static const _UnicodeCharacterRange _UNIRAN_LETTER_RANGES[] = {
+static UnicodeCharacterRange UNIRAN_LETTER[] = {
   {'A', 'Z'}, {'a', 'z'}, {0xaa, 0xaa}, {0xb5, 0xb5}, {0xba, 0xba}, {0xc0, 0xd6}, {0xd8, 0xf6}, {0xf8, 0x2c1},
   {0x2c6, 0x2d1}, {0x2e0, 0x2e4}, {0x2ec, 0x2ec}, {0x2ee, 0x2ee}, {0x370, 0x374}, {0x376, 0x377}, {0x37a, 0x37d}, {0x37f, 0x37f},
   {0x386, 0x386}, {0x388, 0x38a}, {0x38c, 0x38c}, {0x38e, 0x3a1}, {0x3a3, 0x3f5}, {0x3f7, 0x481}, {0x48a, 0x52f}, {0x531, 0x556},
@@ -113,7 +112,7 @@ static const _UnicodeCharacterRange _UNIRAN_LETTER_RANGES[] = {
   {0x10860, 0x10876}, {0x10880, 0x1089e}, {0x108e0, 0x108f2}, {0x108f4, 0x108f5}, {0x10900, 0x10915}, {0x10920, 0x1092b},
 };
 
-static const _UnicodeCharacterRange _UNIRAN_LETTER_MODIFIER_RANGES[] = {
+static UnicodeCharacterRange UNIRAN_LETTER_MODIFIER[] = {
   {0x300, 0x36f}, {0x483, 0x489}, {0x591, 0x5bd}, {0x5bf, 0x5bf}, {0x5c1, 0x5c2}, {0x5c4, 0x5c5}, {0x5c7, 0x5c7}, {0x610, 0x61a},
   {0x64b, 0x65f}, {0x670, 0x670}, {0x6d6, 0x6dc}, {0x6df, 0x6e4}, {0x6e7, 0x6e8}, {0x6ea, 0x6ed}, {0x711, 0x711}, {0x730, 0x74a},
   {0x7a6, 0x7b0}, {0x7eb, 0x7f3}, {0x7fd, 0x7fd}, {0x816, 0x819}, {0x81b, 0x823}, {0x825, 0x827}, {0x829, 0x82d}, {0x859, 0x85b},
@@ -140,7 +139,7 @@ static const _UnicodeCharacterRange _UNIRAN_LETTER_MODIFIER_RANGES[] = {
   {0xabe3, 0xabea}, {0xabec, 0xabed}, {0xfb1e, 0xfb1e}, {0xfe00, 0xfe0f}, {0xfe20, 0xfe2f}, {0x101fd, 0x101fd}, {0x102e0, 0x102e0}, {0x10376, 0x1037a},
 };
 
-static const _UnicodeCharacterRange _UNIRAN_DIGIT_RANGES[] = {
+static UnicodeCharacterRange UNIRAN_DIGIT[] = {
   {'0', '9'}, {0xb2, 0xb3}, {0xb9, 0xb9}, {0xbc, 0xbe}, {0x660, 0x669}, {0x6f0, 0x6f9}, {0x7c0, 0x7c9}, {0x966, 0x96f},
   {0x9e6, 0x9ef}, {0x9f4, 0x9f9}, {0xa66, 0xa6f}, {0xae6, 0xaef}, {0xb66, 0xb6f}, {0xb72, 0xb77}, {0xbe6, 0xbf2}, {0xc66, 0xc6f},
   {0xc78, 0xc7e}, {0xce6, 0xcef}, {0xd58, 0xd5e}, {0xd66, 0xd78}, {0xde6, 0xdef}, {0xe50, 0xe59}, {0xed0, 0xed9}, {0xf20, 0xf33},
@@ -155,21 +154,7 @@ static const _UnicodeCharacterRange _UNIRAN_DIGIT_RANGES[] = {
 };
 
 
-const UnicodeCharacterGroup UNIRAN_LETTER = {
-    COUNT_OF(_UNIRAN_LETTER_RANGES),
-    _UNIRAN_LETTER_RANGES
-};
-const UnicodeCharacterGroup UNIRAN_LETTER_MODIFIER = {
-    COUNT_OF(_UNIRAN_LETTER_MODIFIER_RANGES),
-    _UNIRAN_LETTER_MODIFIER_RANGES
-};
-const UnicodeCharacterGroup UNIRAN_DIGIT = {
-    COUNT_OF(_UNIRAN_DIGIT_RANGES),
-    _UNIRAN_DIGIT_RANGES
-};
-
-
-bool char_within(
+static inline bool within_unichr_ranges(
         /* This is a relatively clever method (shamelessly cribbed and slightly
         modified based on set_contains in the treesitter/parser.h library) to
         determine if a particular character is contained within a very large
@@ -178,17 +163,21 @@ bool char_within(
         character range within it, and then checks the bounds on the range
         itself.
         */
-        UnicodeCharacterGroup *char_group,
+        UnicodeCharacterRange *ranges,
+        uint32_t len,
         int32_t lookahead
+        // _UnicodeCharacterRange *ranges[],
+        // uint32_t len,
+        // int32_t lookahead
 ) {
     uint32_t index = 0;
-    uint32_t size = char_group->count - index;
+    uint32_t size = len - index;
 
     while (size > 1) {
         uint32_t half_size = size / 2;
         uint32_t mid_index = index + half_size;
 
-        _UnicodeCharacterRange *range = &char_group[mid_index];
+        UnicodeCharacterRange *range = &ranges[mid_index];
         if (lookahead >= range->start && lookahead <= range->end) {
             return true;
 
@@ -198,6 +187,9 @@ bool char_within(
         size -= half_size;
     }
 
-    _UnicodeCharacterRange *range = &char_group[index];
+    UnicodeCharacterRange *range = &ranges[index];
     return (lookahead >= range->start && lookahead <= range->end);
 }
+
+
+#define CHAR_WITHIN(range, x) (within_unichr_ranges(range, COUNT_OF(range), x))

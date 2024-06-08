@@ -19,7 +19,7 @@ typedef enum {
     _ERROR_SENTINEL,
     // We use this to force examination of metadata declarations to figure out
     // if it's an embed node
-    _NODE_METADATA_SENTINEL,
+    METADATA_KEY,
     // We use this for state management re: pending nodes
     NODE_EMPTY,
     FLAG_EMBED,
@@ -35,7 +35,7 @@ typedef enum {
 } TokenType;
 const char* _TokenNames[] = {
     "_ERROR_SENTINEL",
-    "_NODE_METADATA_SENTINEL",
+    "METADATA_KEY",
     "NODE_EMPTY",
     "FLAG_EMBED",
     "NODE_DEF",
@@ -60,6 +60,7 @@ const TokenType SOL_SYMBOLS[] = {
 //////////////////////////////////////////////////////////////////////////////
 // STRING/UNICODE HELPERS
 //////////////////////////////////////////////////////////////////////////////
+
 
 static bool is_space(
         int32_t lookahead
@@ -110,6 +111,66 @@ static bool is_indentation_or_eol(
         int32_t lookahead
 ) {
     return lookahead == UNICHR_NEWLINE || is_space(lookahead) || is_tab(lookahead);
+}
+
+
+static uint8_t detect_and_advance_through_letter(
+        /* This detects a letter (including any following modifier
+        codepoints) and returns the number of characters consumed as
+        part of it, or 0 if no letter was found.
+        */
+        TSLexer *lexer
+) {
+    uint8_t charcount = 0;
+    
+    // Note: the way this works in unicode is that you have one letter
+    // character followed by zero or more modifiers, so that's exactly what
+    // we have here
+    if (CHAR_WITHIN(UNIRAN_LETTER, lexer->lookahead)){
+        charcount += 1;
+        lexer->advance(lexer, false);
+
+        while (
+            !lexer->eof(lexer)
+            && CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, lexer->lookahead)
+        ) {
+            charcount += 1;
+            lexer->advance(lexer, false);
+        }
+    }
+
+    return charcount;
+}
+
+
+static uint8_t detect_and_advance_through_digit(
+        /* This detects a unicode digit and returns the number of
+        characters consumed as part of it, or 0 if no digit was found.
+        */
+        TSLexer *lexer
+) {
+    if (CHAR_WITHIN(UNIRAN_DIGIT, lexer->lookahead)){
+        lexer->advance(lexer, false);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+static uint8_t detect_and_advance_through_codepoint(
+        /* This detects a specific single character, returning 1 if
+        found or 0 if not. If found, it also advances the lexer.
+        */
+        TSLexer *lexer,
+        uint32_t codepoint_to_detect
+) {
+    if (lexer->lookahead == codepoint_to_detect){
+        lexer->advance(lexer, false);
+        return 1;
+    }
+
+    return 0;
 }
 
 
@@ -189,9 +250,12 @@ void *tree_sitter_cleancopy_external_scanner_create(
     // printf("##### PARSE START #####\n\n");
     Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
 
-    assert(char_within(&UNIRAN_DIGIT, '0'));
-    assert(char_within(&UNIRAN_LETTER, 't'));
-    assert(char_within(&UNIRAN_LETTER_MODIFIER, 0x300));
+    assert(!CHAR_WITHIN(UNIRAN_DIGIT, ' '));
+    assert(!CHAR_WITHIN(UNIRAN_LETTER, ' '));
+    assert(!CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, ' '));
+    assert(CHAR_WITHIN(UNIRAN_DIGIT, '1'));
+    assert(CHAR_WITHIN(UNIRAN_LETTER, 'a'));
+    assert(CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, 0x300));
 
     // This is how you create an empty array
     // hmm, this emits a compiler warning because the Array(Node *) is used as
@@ -1012,34 +1076,100 @@ static void detect_and_schedule_empty_node(
 }
 
 
-static void mark_if_pending_embedding(
-        /* This takes advantage of our metadata sentinel to examine the
-        upcoming metadata key. If it matches the EMBED_MAGIC, we set the
+static void detect_and_schedule_node_metadata_key(
+        /* This checks for a valid metadata identifier **on a node**.
+        Note that this cannot be used on inline metadata keys (without
+        modification), because we're doing the pending embedding
+        detection here, which is invalid in an inline context.
+
+        To that end: if the metadata key matches the EMBED_MAGIC, we set the
         correct state on the scanner to indicate that the upcoming node
         is an embedded one, but we don't yet emit the token itself.
+
+        Metadata keys can either be strings (as in SQL; this lets you
+        do whatever clever namespacing you want) or values approximately
+        of the form ``[A-z_]([A-z0-9_\-])*``. By "approximately" I mean,
+        like that, except replace the character ranges with "unicode
+        letters" and "unicode digits".
+
+        TODO: this needs to support strings! And they need to be handled
+        here, because we still need to do the pending embedding marking.
         */
         TSLexer *lexer,
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    for (
-        size_t i = 0;
-        i < (sizeof(UNICHR_EMBED_MAGIC) / sizeof(UNICHR_EMBED_MAGIC[0]));
-        ++i
+    uint16_t charcount = 0;
+    uint8_t embed_magic_comparison_sum = 0;
+    embed_magic_comparison_sum += (lexer->lookahead == UNICHR_EMBED_MAGIC[0]);
+    uint8_t comparison_index = 1;
+
+    // This is a little bit "clever", so just to be clear: this
+    // code takes advantage of the fact that the result of an assignment
+    // expression in C (augmented or otherwise) is the value itself.
+    if (
+        (charcount += detect_and_advance_through_codepoint(
+            lexer, UNICHR_UNDERSCORE))
+        || (charcount += detect_and_advance_through_letter(lexer))
     ) {
-        printf("checking char %d\n", i);
-        if (lexer->lookahead != UNICHR_EMBED_MAGIC[i]) {
-            printf("no embed found\n");
-            return; }
-        lexer->advance(lexer, false);
+        // This is effectively a while true, so we need to be careful about
+        // having a break condition within the loop
+        while (!lexer->eof(lexer)) {
+            // Okay, keep in mind that anything here could advance us further
+            // than a single codepoint. BUT the magic is expressed explicitly
+            // in terms of codepoints. So we need to make sure both that the
+            // charcount matches the comparison index, AND that the values
+            // match, for this to be flagged as an embed.
+            if (
+                comparison_index == charcount
+                // Also don't forget that the metadata key might have more
+                // characters than the magic!
+                && charcount < COUNT_OF(UNICHR_EMBED_MAGIC)
+                && lexer->lookahead == UNICHR_EMBED_MAGIC[comparison_index]
+            ) {
+                embed_magic_comparison_sum += 1;
+                comparison_index += 1;
+            }
+
+            uint8_t charcount_with_advance = 0;
+            uint16_t loop_charcount = 0;
+            // Again, we're using the return value of the assignment expression
+            // as the boolean condition, but also the value itself
+            if (
+                (loop_charcount = detect_and_advance_through_codepoint(
+                    lexer, UNICHR_UNDERSCORE))
+                || (loop_charcount = detect_and_advance_through_codepoint(
+                    lexer, UNICHR_HYPHEN))
+                || (loop_charcount = detect_and_advance_through_letter(lexer))
+                || (loop_charcount = detect_and_advance_through_digit(lexer))
+            ) {
+                charcount += loop_charcount;
+                
+            } else {
+                break;
+            }
+        }
     }
 
-    if (lexer->lookahead == UNICHR_METADATA_ASSIGNMENT_SYMBOL) {
-        printf("embed found\n");
+    // Sanity check: we're making sure the length of the characters detected
+    // matches the same length of the UNICHR_EMBED_MAGIC, and also that all
+    // of the characters themselves matched. Therefore, this is the metadata
+    // key to mark it as embedded.
+    if (
+        charcount == COUNT_OF(UNICHR_EMBED_MAGIC)
+        && embed_magic_comparison_sum == COUNT_OF(UNICHR_EMBED_MAGIC)
+    ) {
+        printf("... pending embed node detected!\n");
         scanner->pending_embed_node = true;
+    } else {
+        printf("... NO pending embed node detected! %d, %d\n",
+            charcount, embed_magic_comparison_sum);
     }
 
-    schedule_token(scanner, scan_state, _NODE_METADATA_SENTINEL, 0, true);
+    if (charcount) {
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(scanner, scan_state, METADATA_KEY, charcount, true);
+    }
 }
 
 
@@ -1144,8 +1274,8 @@ bool tree_sitter_cleancopy_external_scanner_scan(
             // We use this sentinel to force treesitter into our external scanner,
             // so we can examine the metadata key, and decide whether it indicates
             // a pending embed node
-            if (can_parse(scan_state, (TokenType[1]){_NODE_METADATA_SENTINEL})){
-                mark_if_pending_embedding(lexer, scanner, scan_state);}
+            if (can_parse(scan_state, (TokenType[1]){METADATA_KEY})){
+                detect_and_schedule_node_metadata_key(lexer, scanner, scan_state);}
 
             if (can_parse(scan_state, (TokenType[1]){EOL})){
                 detect_and_schedule_eol(lexer, scanner, scan_state);}

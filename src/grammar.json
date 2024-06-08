@@ -350,11 +350,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "_node_metadata_sentinel"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "metadata_key"
+          "name": "ext_metadata_key"
         },
         {
           "type": "SYMBOL",
@@ -419,11 +415,6 @@
       "type": "PATTERN",
       "value": "[^\\n]+"
     },
-    "metadata_key": {
-      "type": "PATTERN",
-      "value": "(\\p{L}\\p{M}*|_)(\\p{L}\\p{M}*|[0-9_\\-\\.])*",
-      "flags": "u"
-    },
     "metadata_value": {
       "type": "CHOICE",
       "members": [
@@ -432,6 +423,89 @@
           "name": "_string"
         }
       ]
+    },
+    "uni_letter": {
+      "type": "PATTERN",
+      "value": "\\p{L}",
+      "flags": "u"
+    },
+    "uni_modifier": {
+      "type": "PATTERN",
+      "value": "\\p{M}",
+      "flags": "u"
+    },
+    "uni_number": {
+      "type": "PATTERN",
+      "value": "\\p{N}",
+      "flags": "u"
+    },
+    "uni_underscore": {
+      "type": "STRING",
+      "value": "_"
+    },
+    "uni_hyphen": {
+      "type": "STRING",
+      "value": "-"
+    },
+    "uni_dot": {
+      "type": "STRING",
+      "value": "."
+    },
+    "uni_fslash": {
+      "type": "STRING",
+      "value": "/"
+    },
+    "uni_bslash": {
+      "type": "STRING",
+      "value": "\\"
+    },
+    "uni_pipe": {
+      "type": "STRING",
+      "value": "|"
+    },
+    "uni_bracket_sq1": {
+      "type": "STRING",
+      "value": "["
+    },
+    "uni_bracket_sq2": {
+      "type": "STRING",
+      "value": "]"
+    },
+    "uni_bracket_cur1": {
+      "type": "STRING",
+      "value": "{"
+    },
+    "uni_bracket_cur2": {
+      "type": "STRING",
+      "value": "}"
+    },
+    "uni_hash": {
+      "type": "STRING",
+      "value": "#"
+    },
+    "uni_dollar": {
+      "type": "STRING",
+      "value": "$"
+    },
+    "uni_at": {
+      "type": "STRING",
+      "value": "@"
+    },
+    "uni_ampersand": {
+      "type": "STRING",
+      "value": "&"
+    },
+    "uni_caret": {
+      "type": "STRING",
+      "value": "^"
+    },
+    "uni_backtick": {
+      "type": "STRING",
+      "value": "`"
+    },
+    "uni_asterisk": {
+      "type": "STRING",
+      "value": "*"
     },
     "_string": {
       "type": "CHOICE",
@@ -542,14 +616,6 @@
       "type": "STRING",
       "value": "<<<cleancopy>>>"
     },
-    "_LITERAL_NODE_EMBED_DECLARATION": {
-      "type": "STRING",
-      "value": "embed"
-    },
-    "_LITERAL_EOL": {
-      "type": "PATTERN",
-      "value": "[^\\S\\r\\n]*\\n"
-    },
     "_SYMBOL_METADATA_ASSIGNMENT": {
       "type": "STRING",
       "value": ":"
@@ -563,12 +629,7 @@
       "value": "\""
     }
   },
-  "extras": [
-    {
-      "type": "STRING",
-      "value": "\r"
-    }
-  ],
+  "extras": [],
   "conflicts": [
     [
       "node_title"
@@ -585,7 +646,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "_node_metadata_sentinel"
+      "name": "ext_metadata_key"
     },
     {
       "type": "SYMBOL",

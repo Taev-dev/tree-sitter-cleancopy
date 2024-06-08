@@ -181,7 +181,7 @@
       "required": true,
       "types": [
         {
-          "type": "metadata_key",
+          "type": "ext_metadata_key",
           "named": true
         },
         {
@@ -247,7 +247,7 @@
     "named": true
   },
   {
-    "type": "metadata_key",
+    "type": "ext_metadata_key",
     "named": true
   }
 ]

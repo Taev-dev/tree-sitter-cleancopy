@@ -80,8 +80,7 @@ module.exports = grammar({
 
         node_metadata_declaration_line: $ => seq(
             $._ext_node_continue,
-            $._node_metadata_sentinel,
-            $.metadata_key,
+            $.ext_metadata_key,
             $._SYMBOL_METADATA_ASSIGNMENT,
             repeat($.nih_whitespace),
             $.metadata_value,
@@ -105,13 +104,31 @@ module.exports = grammar({
         // unicode letters (including letters with marks on them) and the
         // underscore as the first character, and then add in the -, ., and
         // 0-9 as following characters
-        metadata_key: $ => /(\p{L}\p{M}*|_)(\p{L}\p{M}*|[0-9_\-\.])*/u,
+        // metadata_key: $ => /(\p{L}\p{M}*|_)(\p{L}\p{M}*|[0-9_\-\.])*/u,
         metadata_value: $ => choice(
             $._string
             // TODO: other metadata values go here!
             ),
-
-
+        uni_letter: $ => /\p{L}/u,
+        uni_modifier: $ => /\p{M}/u,
+        uni_number: $ => /\p{N}/u,
+        uni_underscore: $ => '_',
+        uni_hyphen: $ => '-',
+        uni_dot: $ => '.',
+        uni_fslash: $ => '/',
+        uni_bslash: $ => '\\',
+        uni_pipe: $ => '|',
+        uni_bracket_sq1: $ => '[',
+        uni_bracket_sq2: $ => ']',
+        uni_bracket_cur1: $ => '{',
+        uni_bracket_cur2: $ => '}',
+        uni_hash: $ => '#',
+        uni_dollar: $ => '$',
+        uni_at: $ => '@',
+        uni_ampersand: $ => '&',
+        uni_caret: $ => '^',
+        uni_backtick: $ => '`',
+        uni_asterisk: $ => '*',
 
 
         _string: $ => choice(
@@ -136,14 +153,6 @@ module.exports = grammar({
 
 
         _LITERAL_VERSION_COMMENT: $ => '<<<cleancopy>>>',
-        // _LITERAL_NODE_ID_DECLARATION: $ => 'id',
-        _LITERAL_NODE_EMBED_DECLARATION: $ => 'embed',
-
-        // Note that this includes any trailing whitespace
-        // Also note: this character class is whitespace EXCEPT newlines (see
-        // https://stackoverflow.com/a/3469155). We do this so that we don't
-        // accidentally consume empty lines following an EOL.
-        _LITERAL_EOL: $ => /[^\S\r\n]*\n/,
 
         _SYMBOL_METADATA_ASSIGNMENT: $ => ':',
         _SYMBOL_SINGLE_QUOTE: $ => "'",
@@ -152,7 +161,7 @@ module.exports = grammar({
 
     externals: $ => [
         $._error_sentinel,
-        $._node_metadata_sentinel,
+        $.ext_metadata_key,
         // Note that we need this to be external so that we can manage the
         // internal state for the scanner -- we may have previously marked
         // the pending node as an embedded one, and that needs to be cleared
