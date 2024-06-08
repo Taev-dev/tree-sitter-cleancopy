@@ -1,0 +1,217 @@
+==================
+Metadata, generic identifier key, string1 value
+==================
+> Node title
+foo_bar: 'some embed type'
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1)))))
+    (empty_line))
+
+
+==================
+Metadata, generic string1 key, string1 value
+==================
+> Node title
+'some.string.key': 'some embed type'
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key
+                    (STRING1))
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, string2 value
+==================
+> Node title
+foo: "bar"
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING2)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, multiline string1 value
+:skip
+==================
+> Node title
+foo: 'bar'
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (STRING1)
+                    (STRING1)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, bool value
+==================
+> Node title
+foo: true
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (TRUE)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, null value
+==================
+> Node title
+foo: null
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (NULL)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, __missing__ value
+==================
+> Node title
+foo: __missing__
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (MISSING)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, integer value
+==================
+> Node title
+foo: 123
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (integer)))))
+    (empty_line))
+
+
+==================
+Metadata, generic identifier key, decimal value
+==================
+> Node title
+foo: 123.456
+<
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (node_metadata
+            (node_metadata_declaration_line
+                (node_metadata_key)
+                (nih_whitespace)
+                (metadata_value
+                    (decimal)))))
+    (empty_line))

@@ -80,7 +80,7 @@ module.exports = grammar({
 
         node_metadata_declaration_line: $ => seq(
             $._ext_node_continue,
-            $.ext_metadata_key,
+            $.node_metadata_key,
             $._SYMBOL_METADATA_ASSIGNMENT,
             repeat($.nih_whitespace),
             $.metadata_value,
@@ -99,15 +99,23 @@ module.exports = grammar({
         inline_richtext: $ => /[^\n]+/,
         inline_embedding: $ => /[^\n]+/,
 
+        // This is a (semi-deliberate) bug / departure from the spec, in
+        // the interests of substantially simplifying parsing (by allowing
+        // treesitter to handle all strings, instead of the external scanner)
+        node_metadata_key: $ => choice($._ext_metadata_key, $._string_multiline),
 
         // This looks way more complicated than it is; we want to support
         // unicode letters (including letters with marks on them) and the
         // underscore as the first character, and then add in the -, ., and
         // 0-9 as following characters
-        // metadata_key: $ => /(\p{L}\p{M}*|_)(\p{L}\p{M}*|[0-9_\-\.])*/u,
         metadata_value: $ => choice(
-            $._string
-            // TODO: other metadata values go here!
+            $._string_multiline,
+            $._boolean,
+            $.integer,
+            $.decimal,
+            $.NULL,
+            $.MISSING
+            // TODO: mappings and sequences!
             ),
         uni_letter: $ => /\p{L}/u,
         uni_modifier: $ => /\p{M}/u,
@@ -130,26 +138,45 @@ module.exports = grammar({
         uni_backtick: $ => '`',
         uni_asterisk: $ => '*',
 
-
-        _string: $ => choice(
+        _string_multiline: $ => choice(
             seq(
                 $._SYMBOL_SINGLE_QUOTE,
-                $._string_single,
+                $._string1_multiline,
                 $._SYMBOL_SINGLE_QUOTE),
 
             seq(
                 $._SYMBOL_DOUBLE_QUOTE,
-                $._string_double,
+                $._string2_multiline,
                 $._SYMBOL_DOUBLE_QUOTE)),
-        _string_single: $ => seq(
+        _string1_multiline: $ => seq(
             $.STRING1,
             repeat(seq($._eol, $._ext_node_continue, $.STRING1))),
-        _string_double: $ => seq(
+        _string2_multiline: $ => seq(
             $.STRING2,
             repeat(seq($._eol, $._ext_node_continue, $.STRING2))),
 
-        STRING1: $ => /(\\'|[^'])+/,
-        STRING2: $ => /(\\"|[^"])+/,
+        _boolean: $ => choice($.TRUE, $.FALSE),
+        integer: $ => repeat1($._DIGIT),
+        decimal: $ => seq(
+            repeat1($._DIGIT), $._DECIMAL_SEPARATOR, repeat($._DIGIT)),
+
+        // TODO: these aren't working right for multiline strings; it's
+        // consuming the newline and I'm not sure how. Unfortunately I think
+        // we'll need to move this into the external scanner for it to work
+        // completely right. The problem is that it's erroneously collapsing
+        // multiline strings into a single string, including the newline and
+        // continuation etc
+        STRING1: $ => /([^\\\n]\\'|[^\n'])+/,
+        STRING2: $ => /([^\\\n]\\"|[^\n"])+/,
+
+        TRUE: $ => 'true',
+        FALSE: $ => 'false',
+        NULL: $ => 'null',
+        MISSING: $ => '__missing__',
+        // TODO: move these into the external scanner (for consistency w/
+        // identifiers and greater flexibility)
+        _DIGIT: $ => /[0-9]/,
+        _DECIMAL_SEPARATOR: $ => '.',
 
 
         _LITERAL_VERSION_COMMENT: $ => '<<<cleancopy>>>',
@@ -161,7 +188,7 @@ module.exports = grammar({
 
     externals: $ => [
         $._error_sentinel,
-        $.ext_metadata_key,
+        $._ext_metadata_key,
         // Note that we need this to be external so that we can manage the
         // internal state for the scanner -- we may have previously marked
         // the pending node as an embedded one, and that needs to be cleared

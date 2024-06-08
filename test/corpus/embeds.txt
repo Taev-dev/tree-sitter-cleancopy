@@ -15,7 +15,7 @@ __embed__: 'some embed type'
                 (inline_richtext)))
         (node_metadata
             (node_metadata_declaration_line
-                (ext_metadata_key)
+                (node_metadata_key)
                 (nih_whitespace)
                 (metadata_value
                     (STRING1))))
@@ -42,7 +42,7 @@ __embed__: 'some embed type'
                 (inline_richtext)))
         (node_metadata
             (node_metadata_declaration_line
-                (ext_metadata_key)
+                (node_metadata_key)
                 (nih_whitespace)
                 (metadata_value
                     (STRING1))))
@@ -72,7 +72,7 @@ __embed__: 'some embed type'
                 (inline_richtext)))
         (node_metadata
             (node_metadata_declaration_line
-                (ext_metadata_key)
+                (node_metadata_key)
                 (nih_whitespace)
                 (metadata_value
                     (STRING1))))
@@ -102,7 +102,7 @@ __embed__: 'some embed type'
                 (inline_richtext)))
         (node_metadata
             (node_metadata_declaration_line
-                (ext_metadata_key)
+                (node_metadata_key)
                 (nih_whitespace)
                 (metadata_value
                     (STRING1))))
@@ -130,7 +130,7 @@ __embed__: 'some embed type'
                 (inline_richtext)))
         (node_metadata
             (node_metadata_declaration_line
-                (ext_metadata_key)
+                (node_metadata_key)
                 (nih_whitespace)
                 (metadata_value
                     (STRING1)))))

@@ -15,6 +15,11 @@
     }
   },
   {
+    "type": "decimal",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "document",
     "named": true,
     "fields": {},
@@ -72,6 +77,11 @@
     "fields": {}
   },
   {
+    "type": "integer",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "metadata_value",
     "named": true,
     "fields": {},
@@ -80,11 +90,35 @@
       "required": false,
       "types": [
         {
+          "type": "FALSE",
+          "named": true
+        },
+        {
+          "type": "MISSING",
+          "named": true
+        },
+        {
+          "type": "NULL",
+          "named": true
+        },
+        {
           "type": "STRING1",
           "named": true
         },
         {
           "type": "STRING2",
+          "named": true
+        },
+        {
+          "type": "TRUE",
+          "named": true
+        },
+        {
+          "type": "decimal",
+          "named": true
+        },
+        {
+          "type": "integer",
           "named": true
         }
       ]
@@ -181,15 +215,34 @@
       "required": true,
       "types": [
         {
-          "type": "ext_metadata_key",
-          "named": true
-        },
-        {
           "type": "metadata_value",
           "named": true
         },
         {
           "type": "nih_whitespace",
+          "named": true
+        },
+        {
+          "type": "node_metadata_key",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "node_metadata_key",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "STRING1",
+          "named": true
+        },
+        {
+          "type": "STRING2",
           "named": true
         }
       ]
@@ -239,6 +292,22 @@
     "fields": {}
   },
   {
+    "type": ".",
+    "named": false
+  },
+  {
+    "type": "FALSE",
+    "named": true
+  },
+  {
+    "type": "MISSING",
+    "named": true
+  },
+  {
+    "type": "NULL",
+    "named": true
+  },
+  {
     "type": "STRING1",
     "named": true
   },
@@ -247,7 +316,7 @@
     "named": true
   },
   {
-    "type": "ext_metadata_key",
+    "type": "TRUE",
     "named": true
   }
 ]

@@ -350,7 +350,7 @@
         },
         {
           "type": "SYMBOL",
-          "name": "ext_metadata_key"
+          "name": "node_metadata_key"
         },
         {
           "type": "SYMBOL",
@@ -415,12 +415,45 @@
       "type": "PATTERN",
       "value": "[^\\n]+"
     },
+    "node_metadata_key": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_ext_metadata_key"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_string_multiline"
+        }
+      ]
+    },
     "metadata_value": {
       "type": "CHOICE",
       "members": [
         {
           "type": "SYMBOL",
-          "name": "_string"
+          "name": "_string_multiline"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_boolean"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "integer"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "decimal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "NULL"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "MISSING"
         }
       ]
     },
@@ -507,7 +540,7 @@
       "type": "STRING",
       "value": "*"
     },
-    "_string": {
+    "_string_multiline": {
       "type": "CHOICE",
       "members": [
         {
@@ -519,7 +552,7 @@
             },
             {
               "type": "SYMBOL",
-              "name": "_string_single"
+              "name": "_string1_multiline"
             },
             {
               "type": "SYMBOL",
@@ -536,7 +569,7 @@
             },
             {
               "type": "SYMBOL",
-              "name": "_string_double"
+              "name": "_string2_multiline"
             },
             {
               "type": "SYMBOL",
@@ -546,7 +579,7 @@
         }
       ]
     },
-    "_string_single": {
+    "_string1_multiline": {
       "type": "SEQ",
       "members": [
         {
@@ -575,7 +608,7 @@
         }
       ]
     },
-    "_string_double": {
+    "_string2_multiline": {
       "type": "SEQ",
       "members": [
         {
@@ -604,13 +637,80 @@
         }
       ]
     },
+    "_boolean": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "TRUE"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "FALSE"
+        }
+      ]
+    },
+    "integer": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_DIGIT"
+      }
+    },
+    "decimal": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "REPEAT1",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_DIGIT"
+          }
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_DECIMAL_SEPARATOR"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_DIGIT"
+          }
+        }
+      ]
+    },
     "STRING1": {
       "type": "PATTERN",
-      "value": "(\\\\'|[^'])+"
+      "value": "([^\\\\\\n]\\\\'|[^\\n'])+"
     },
     "STRING2": {
       "type": "PATTERN",
-      "value": "(\\\\\"|[^\"])+"
+      "value": "([^\\\\\\n]\\\\\"|[^\\n\"])+"
+    },
+    "TRUE": {
+      "type": "STRING",
+      "value": "true"
+    },
+    "FALSE": {
+      "type": "STRING",
+      "value": "false"
+    },
+    "NULL": {
+      "type": "STRING",
+      "value": "null"
+    },
+    "MISSING": {
+      "type": "STRING",
+      "value": "__missing__"
+    },
+    "_DIGIT": {
+      "type": "PATTERN",
+      "value": "[0-9]"
+    },
+    "_DECIMAL_SEPARATOR": {
+      "type": "STRING",
+      "value": "."
     },
     "_LITERAL_VERSION_COMMENT": {
       "type": "STRING",
@@ -646,7 +746,7 @@
     },
     {
       "type": "SYMBOL",
-      "name": "ext_metadata_key"
+      "name": "_ext_metadata_key"
     },
     {
       "type": "SYMBOL",
