@@ -45,7 +45,6 @@ const int32_t UNICHR_METADATA_ASSIGNMENT_SYMBOL = 0x003A;
 
 const int32_t UNICHR_UNDERSCORE = '_';
 const int32_t UNICHR_HYPHEN = '-';
-const int32_t UNICHR_DOT = '.';
 const int32_t UNICHR_BSLASH = '\\';
 const int32_t UNICHR_PIPE = '|';
 const int32_t UNICHR_HASH = '#';
@@ -53,6 +52,9 @@ const int32_t UNICHR_CARET = '^';
 const int32_t UNICHR_BACKTICK = '`';
 const int32_t UNICHR_ASTERISK = '*';
 const int32_t UNICHR_TILDE = '~';
+
+const int32_t UNICHR_DOT = '.';
+const int32_t UNICHR_PLUS = '+';
 
 
 static UnicodeCharacterRange UNIRAN_LETTER[] = {

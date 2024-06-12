@@ -1,0 +1,483 @@
+==================
+Root UNOL-1 singles w/ EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with three items, all single-line
+++  and no indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root OL-1 singles w/ EoF emptyline
+==================
+Here we have a single content row followed by:
+1.. an ordered list
+2.. with three items, all single-line
+3.. and no indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root UNOL-1 singles w/ interstitial emptyline and EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+
+++  with several items, all single-line
+
+++  and no indentation changes
+
+++  but a bunch of empty lines in the middle
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line)
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line)
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line)
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root UNOL-3 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with several items, all single-line
+    ++  plus an indentation change
+        ++  and a non-unwrapping EoF emptyline
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)
+            (unordered_list
+                (unordered_list_item
+                    (inline_richtext)
+                    (unordered_list
+                        (unordered_list_item
+                            (inline_richtext)))))))
+    (empty_line))
+
+
+==================
+Root OL-3 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+1.. an ordered list
+2.. with several items, all single-line
+    1.. plus an indentation change
+        1.. and a non-unwrapping EoF emptyline
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)
+            (ordered_list
+                (ordered_list_item
+                    (inline_richtext)
+                    (ordered_list
+                        (ordered_list_item
+                            (inline_richtext)))))))
+    (empty_line))
+
+
+==================
+Root UNOL-3 singles w/ unwrapping, EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with several items, all single-line
+    ++  plus an indentation change
+        ++  and an unwrapping EoF emptyline
+    ++  but without
+++  any changes in list type
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)
+            (unordered_list
+                (unordered_list_item
+                    (inline_richtext)
+                    (unordered_list
+                        (unordered_list_item
+                            (inline_richtext))))
+                (unordered_list_item
+                    (inline_richtext))))
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root OL-3 singles w/ unwrapping, EoF emptyline
+==================
+Here we have a single content row followed by:
+1.. an ordered list
+2.. with several items, all single-line
+    1.. plus an indentation change
+        1.. and an unwrapping EoF emptyline
+    2.. but without
+3.. any changes in list type
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)
+            (ordered_list
+                (ordered_list_item
+                    (inline_richtext)
+                    (ordered_list
+                        (ordered_list_item
+                            (inline_richtext))))
+                (ordered_list_item
+                    (inline_richtext))))
+        (ordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root OL-to-UNOL-1 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+1.. an ordered list
+++  swapping to an unordered list
+++  with several items, all single-line
+3.. and no indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext)))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root UNOL-to-OL-1 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+1.. swapping to an ordered list
+2.. with several items, all single-line
+++  and no indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root UNOL-1 multis w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with several items,
+    some multi-line
+++  but no
+    indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (unordered_list
+        (unordered_list_item
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)
+            (inline_richtext))
+        (unordered_list_item
+            (inline_richtext)
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Root OL-1 multis w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+1.. an unordered list
+2.. with several items,
+    some multi-line
+3.. but no
+    indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (ordered_list
+        (ordered_list_item
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)
+            (inline_richtext))
+        (ordered_list_item
+            (inline_richtext)
+            (inline_richtext)))
+    (empty_line))
+
+
+==================
+Node-1 UNOL-1 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+> A node, containing
+    ++  an unordered list
+    ++  with several items, all single-line
+    ++  and no indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (unordered_list
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext))))
+    (empty_line))
+
+
+==================
+Node-1 UNOL-1 multis w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+> A node, containing
+    ++  an unordered list
+    ++  with several items,
+        some multi-line
+    ++  but no
+        indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (unordered_list
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext)
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext)
+                (inline_richtext))))
+    (empty_line))
+
+
+==================
+Node-1 UNOL-2 singles w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+> A node, containing
+    ++  an unordered list
+    ++  with several items, all single-line
+        ++  and an indentation changes
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (unordered_list
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext)
+                (unordered_list
+                    (unordered_list_item
+                        (inline_richtext))))))
+    (empty_line))
+
+
+==================
+Node-1 UNOL-2 multis w/ no-unwrap EoF emptyline
+==================
+Here we have a single content row followed by:
+> A node, containing
+    ++  an unordered list
+    ++  with several items,
+        some multi-line
+        ++  plus an
+            indentation change
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (unordered_list
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext)
+                (inline_richtext)
+                (unordered_list
+                    (unordered_list_item
+                        (inline_richtext)
+                        (inline_richtext))))))
+    (empty_line))
+
+
+==================
+Node-1 UNOL-2 multis w/ unwrapping EoF emptyline
+==================
+Here we have a single content row followed by:
+> A node, containing
+    ++  an unordered list
+    ++  with several items,
+        some multi-line
+        ++  plus an
+            indentation change
+    ++  and
+        unwrapping
+
+tada!
+
+---
+
+(document
+    (content_line
+        (inline_richtext))
+    (node
+        (node_title
+            (node_title_line
+                (nih_whitespace)
+                (inline_richtext)))
+        (unordered_list
+            (unordered_list_item
+                (inline_richtext))
+            (unordered_list_item
+                (inline_richtext)
+                (inline_richtext)
+                (unordered_list
+                    (unordered_list_item
+                        (inline_richtext)
+                        (inline_richtext))))
+            (unordered_list_item
+                (inline_richtext)
+                (inline_richtext))))
+    (empty_line)
+    (content_line
+        (inline_richtext))
+    (empty_line))

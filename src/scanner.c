@@ -17,22 +17,29 @@ typedef enum {
 
     We use the _ERROR_SENTINEL to detect this.
     */
-    _ERROR_SENTINEL,
+    _TOKEN_ERROR_SENTINEL,
     // We use this to force examination of metadata declarations to figure out
     // if it's an embed node
-    METADATA_KEY,
+    TOKEN_METADATA_KEY,
     // We use this for state management re: pending nodes
-    NODE_EMPTY,
-    FLAG_EMBED,
-    NODE_DEF,
-    EOL,
-    EMPTY_LINE,
-    NIH_WHITESPACE,
-    NODE_CONTINUE,
-    NODE_BEGIN,
-    NODE_END,
-    EoF,
-    AUTOCLOSE_WARNING,
+    TOKEN_NODE_EMPTY,
+    TOKEN_FLAG_EMBED,
+    TOKEN_NODE_DEF,
+    TOKEN_EOL,
+    TOKEN_EMPTY_LINE,
+    TOKEN_NIH_WHITESPACE,
+    TOKEN_NODE_CONTINUE,
+    TOKEN_NODE_BEGIN,
+    TOKEN_NODE_END,
+    TOKEN_LIST_CONTINUE,
+    TOKEN_LIST_HANGAR,
+    TOKEN_LIST_BEGIN,
+    TOKEN_LIST_END,
+    TOKEN_MARKER_OL_INDEX,
+    TOKEN_MARKER_OL,
+    TOKEN_MARKER_UNOL,
+    TOKEN_EOF,
+    TOKEN_AUTOCLOSE_WARNING,
 } TokenType;
 const char* _TokenNames[] = {
     "_ERROR_SENTINEL",
@@ -46,15 +53,22 @@ const char* _TokenNames[] = {
     "NODE_CONTINUE",
     "NODE_BEGIN",
     "NODE_END",
+    "LIST_CONTINUE",
+    "LIST_HANGAR",
+    "LIST_BEGIN",
+    "LIST_END",
+    "MARKER_OL_INDEX",
+    "MARKER_OL",
+    "MARKER_UNOL",
     "EoF",
     "AUTOCLOSE_WARNING"};
 
 
 const TokenType SOL_SYMBOLS[] = {
-    EMPTY_LINE,
-    NODE_CONTINUE,
-    NODE_BEGIN,
-    NODE_END
+    TOKEN_EMPTY_LINE,
+    TOKEN_NODE_CONTINUE,
+    TOKEN_NODE_BEGIN,
+    TOKEN_NODE_END
 };
 
 
@@ -164,7 +178,7 @@ static uint8_t detect_and_advance_through_codepoint(
         found or 0 if not. If found, it also advances the lexer.
         */
         TSLexer *lexer,
-        uint32_t codepoint_to_detect
+        int32_t codepoint_to_detect
 ) {
     if (lexer->lookahead == codepoint_to_detect){
         lexer->advance(lexer, false);
@@ -179,11 +193,25 @@ static uint8_t detect_and_advance_through_codepoint(
 // TYPEDEFS
 //////////////////////////////////////////////////////////////////////////////
 
+
+typedef enum {
+    LSTAT_NO_LIST,
+    LSTAT_OL,
+    LSTAT_UNOL
+} ListStatus;
+
+
 // IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
 typedef struct {
+    // Note: because we use contexts for both nodes and lists, this isn't always
+    // the same as the index in the context stack!
     uint8_t node_level;
+    // The marker level is the list "depth" -- in other words, how many
+    // indents we're past the node level **at the marker**
+    uint8_t list_marker_level;
     bool is_embed;
-} Node;
+    ListStatus list_status;
+} Context;
 // SUPER IMPORTANT: if you add anything here with a variable length, you'll
 // need to make significant changes to de/serialization! We currently rely
 // upon knowing the node size in advance before even starting to serialize the
@@ -219,6 +247,8 @@ typedef struct {
     // rest of the node metadata, which solves a bunch of problems with how
     // treesitter expects the grammar to be
     bool pending_embed_node;
+    // We use this to note what kind of list is pending
+    ListStatus pending_list_status;
 
     // UNUSED. TODO: REMOVE!
     bool eof_detected_immediately_after_eol;
@@ -228,7 +258,7 @@ typedef struct {
     // the token backlog is consumed, then parsing is finished.
     bool post_eof;
 
-    Array(Node *) * node_stack;
+    Array(Context *) * context_stack;
     Array(PendingToken *) * token_backlog;
 } Scanner;
 
@@ -259,17 +289,18 @@ void *tree_sitter_cleancopy_external_scanner_create(
     assert(CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, 0x300));
 
     // This is how you create an empty array
-    // hmm, this emits a compiler warning because the Array(Node *) is used as
+    // hmm, this emits a compiler warning because the Array(Context *) is used as
     // a throwaway type to calculate a size.
-    scanner->node_stack = ts_malloc(sizeof(Array(Node *)));
+    scanner->context_stack = ts_malloc(sizeof(Array(Context *)));
     scanner->token_backlog = ts_malloc(sizeof(Array(PendingToken *)));
     scanner->indentation_char = 0;
     scanner->indentation_char_repetitions = 0;
     scanner->token_backlog_index = 0;
     scanner->pending_embed_node = false;
+    scanner->pending_list_status = LSTAT_NO_LIST;
     scanner->eof_detected_immediately_after_eol = false;
     scanner->post_eof = false;
-    array_init(scanner->node_stack);
+    array_init(scanner->context_stack);
     array_init(scanner->token_backlog);
 
     return scanner;
@@ -281,13 +312,13 @@ void tree_sitter_cleancopy_external_scanner_destroy(
 ) {
     Scanner *scanner = (Scanner *)payload;
 
-    // We need to free the nodes themselves before clearing the array, because
+    // We need to free the contexts themselves before clearing the array, because
     // it doesn't handle this.
-    for (size_t i = 0; i < scanner->node_stack->size; ++i) {
-        printf("!!! WARNING: node_stack had nodes on destruction!\n");
-        ts_free(*array_get(scanner->node_stack, i));
+    for (size_t i = 0; i < scanner->context_stack->size; ++i) {
+        printf("!!! WARNING: context_stack had contexts on destruction!\n");
+        ts_free(*array_get(scanner->context_stack, i));
     }
-    array_delete(scanner->node_stack);
+    array_delete(scanner->context_stack);
     // Same goes for the token backlog.
     for (size_t i = 0; i < scanner->token_backlog->size; ++i) {
         // Note that, because the token backlog only gets cleared if we call
@@ -370,6 +401,7 @@ static void schedule_token(
     assert(advance_count == 0 || !scan_state->positive_match_found | !already_consumed);
     assert(!scan_state->negative_match_found);
     assert(advance_count == 0 || !already_consumed || scan_state->lexer_marked);
+    debug("...Scheduling %s\n", _TokenNames[token]);
 
     scan_state->positive_match_found = true;
     PendingToken *pending_token = ts_malloc(sizeof(PendingToken));
@@ -454,31 +486,83 @@ static void emit_token(
     debug("... emitting %s\n", _TokenNames[token]);
     lexer->result_symbol = token;
 
-    if (token == NODE_BEGIN) {
+    if (token == TOKEN_NODE_BEGIN) {
         uint8_t current_node_level;
-        if (scanner->node_stack->size > 0){
+        if (scanner->context_stack->size > 0){
             current_node_level = (
-                (Node *)*array_back(scanner->node_stack))->node_level;
+                (Context *)*array_back(scanner->context_stack))->node_level;
         } else {
             current_node_level = 0;
         }
 
-        Node *node = ts_malloc(sizeof(Node));
-        node->node_level = current_node_level + 1;
-        node->is_embed = scanner->pending_embed_node;
-        array_push(scanner->node_stack, node);
+        Context *context = ts_malloc(sizeof(Context));
+        context->node_level = current_node_level + 1;
+        context->is_embed = scanner->pending_embed_node;
+        context->list_status = LSTAT_NO_LIST;
+        context->list_marker_level = 0;
+        array_push(scanner->context_stack, context);
 
         scanner->pending_embed_node = false;
-    } else if (token == NODE_EMPTY) {
-        scanner->pending_embed_node = false;
-    } else if (token == NODE_END) {
-        assert(scanner->node_stack->size > 0);
-        Node *node_to_end = array_pop(scanner->node_stack);
-        // We'll need a helper at some point to close out any misc richtext
-        // formatting that might be open still; that will go right here
-        ts_free(node_to_end);
+        if (scanner->pending_list_status != LSTAT_NO_LIST) {
+            debug(
+                "^^^ NOTE: expecting a list as the first row in the new node!\n");
+        }
+
+    } else if (token == TOKEN_LIST_BEGIN) {
+        assert(scanner->pending_list_status != LSTAT_NO_LIST);
+        uint8_t current_node_level;
+        uint8_t next_marker_level;
+        if (scanner->context_stack->size > 0){
+            Context *active_context = *array_back(scanner->context_stack);
+            current_node_level = active_context->node_level;
+
+            // The marker level is the list "depth" -- in other words, how many
+            // indents we're past the node level **at the marker**. Therefore,
+            // it always needs to start at zero, but needs to increment by 1
+            // every time we start a list
+            if (active_context->list_status != LSTAT_NO_LIST) {
+                debug("^^^ Beginning nested list\n");
+                next_marker_level = active_context->list_marker_level + 1;
+            } else {
+                debug("^^^ Beginning new list\n");
+                next_marker_level = 0;
+            }
+
+        } else {
+            current_node_level = 0;
+            next_marker_level = 0;
+        }
+
+        Context *context = ts_malloc(sizeof(Context));
+        context->node_level = current_node_level;
+        context->is_embed = false;
+        context->list_status = scanner->pending_list_status;
+        context->list_marker_level = next_marker_level;
+        array_push(scanner->context_stack, context);
+        scanner->pending_list_status = LSTAT_NO_LIST;
 
         assert(!scanner->pending_embed_node);
+
+    } else if (token == TOKEN_NODE_EMPTY) {
+        scanner->pending_embed_node = false;
+
+    } else if (token == TOKEN_NODE_END) {
+        assert(scanner->context_stack->size > 0);
+        assert(!scanner->pending_embed_node);
+        assert(scanner->pending_list_status == LSTAT_NO_LIST);
+        Context *context_to_end = array_pop(scanner->context_stack);
+        assert(context_to_end->list_status == LSTAT_NO_LIST);
+        ts_free(context_to_end);
+
+    } else if (token == TOKEN_LIST_END) {
+        assert(scanner->context_stack->size > 0);
+        assert(!scanner->pending_embed_node);
+        // Note: we might have this set to something, if we're swapping out
+        // one list type for another
+        // assert(scanner->pending_list_status == LSTAT_NO_LIST);
+        Context *context_to_end = array_pop(scanner->context_stack);
+        assert(context_to_end->list_status != LSTAT_NO_LIST);
+        ts_free(context_to_end);
     }
 }
 
@@ -590,17 +674,132 @@ typedef struct {
 
 
 typedef enum {
-    SOL_NODE_CONTINUE,
-    SOL_NODE_BEGIN,
-    SOL_NODE_END,
+    SOL_INDENT_HELD,
+    SOL_INDENT_INCREASED,
+    SOL_INDENT_DECREASED,
     SOL_IS_EOF
-} SoLNodeState;
+} SoLIndentation;
+
+
+typedef enum {
+    MARKER_OL,
+    MARKER_UNOL
+} SoLMarker;
 
 
 typedef struct {
-    SoLNodeState sol_node_state;
-    uint8_t level_delta;
-} SoLNodeStateClassification;
+    SoLIndentation sol_indent_action;
+    uint8_t sol_indentation_level;
+} SoLIndentationClassification;
+
+
+typedef struct {
+    SoLMarker marker;
+    bool detected;
+    uint8_t chars_advanced;
+    uint8_t marker_payload_charcount;
+} SoLMarkerDetection;
+
+
+static SoLMarkerDetection *detect_and_advance_through_ol_marker(
+        /* This detects the marker for an ordered list.
+        */
+        TSLexer *lexer
+) {
+    SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
+    detection->marker = MARKER_OL;
+    detection->chars_advanced = 0;
+    detection->detected = false;
+    detection->marker_payload_charcount = 0;
+
+    uint8_t digit_index = 0;
+    while (CHAR_WITHIN(UNIRAN_DIGIT, lexer->lookahead)){
+        lexer->advance(lexer, false);
+        detection->chars_advanced += 1;
+        detection->marker_payload_charcount += 1;
+    }
+
+    if (detection->chars_advanced){
+        if (lexer->lookahead == UNICHR_DOT) {
+            detection->chars_advanced += 1;
+            lexer->advance(lexer, false);
+
+            if (lexer->lookahead == UNICHR_DOT) {
+                detection->chars_advanced += 1;
+                lexer->advance(lexer, false);
+                detection->detected = true;
+            }
+        }
+    }
+    return detection;
+}
+
+
+static SoLMarkerDetection *detect_and_advance_through_unol_marker(
+        /* This detects the marker for an unordered list.
+        */
+        TSLexer *lexer
+) {
+    SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
+    detection->marker = MARKER_UNOL;
+    detection->chars_advanced = 0;
+    detection->detected = false;
+    detection->marker_payload_charcount = 0;
+
+    if (lexer->lookahead == UNICHR_PLUS) {
+        detection->chars_advanced += 1;
+        lexer->advance(lexer, false);
+
+        if (lexer->lookahead == UNICHR_PLUS) {
+            detection->chars_advanced += 1;
+            lexer->advance(lexer, false);
+            detection->detected = true;
+        }
+    }
+    return detection;
+}
+
+
+static SoLMarkerDetection *detect_and_advance_through_SoL_marker(
+        /* This detects any start-of-line markers. Note that they **must**
+        be mutually exclusive; otherwise, we'll get into a situation where
+        one is partially consumed by an earlier marker.
+
+        Note that, if no marker is found, we'll return a null pointer.
+        */
+        TSLexer *lexer
+) {
+    SoLMarkerDetection *detection;
+
+    detection = detect_and_advance_through_unol_marker(lexer);
+    if (detection->detected) {
+        return detection;
+    } else if (detection->chars_advanced) {
+        debug(
+            "... chars_advanced within SoL marker detection (unol); "
+            "returning null\n");
+        ts_free(detection);
+        return NULL;
+    } else {
+        ts_free(detection);
+    }
+
+    detection = detect_and_advance_through_ol_marker(lexer);
+    if (detection->detected) {
+        return detection;
+    } else if (detection->chars_advanced) {
+        debug(
+            "... chars_advanced within SoL marker detection (ol); "
+            "returning null\n");
+        ts_free(detection);
+        return NULL;
+    } else {
+        ts_free(detection);
+    }
+
+    // Note: we already freed the detection! We don't need to do it again!
+    return NULL;
+}
 
 
 static uint8_t detect_and_advance_through_eol(
@@ -689,20 +888,33 @@ static SoLWhitespace *advance_through_empty_lines(
 }
 
 
-static SoLNodeStateClassification classify_sol_node_state(
+static SoLIndentationClassification *classify_sol_indentation(
         /* Determines if the StartOfLine is a NODE_CONTINUE, NODE_BEGIN,
-        or NODE_END. Keep in mind that we have more to consider than
-        ^^just^^ the indentation level -- specifically, lists and embeds.
+        or NODE_END (or the equivalent for lists). Keep in mind that we
+        have more to consider than ^^just^^ the number of indentation
+        characters, since embeds modify whether or not we detect
+        increased indentation at all, and lists change the "setpoint"
+        of the indentation level.
+
+        Also note: this is ONLY concerned with classifying the
+        indentation level! We're NOT trying to figure out which tokens
+        we should emit.
         */
         Scanner *scanner,
-        Node *active_node,
-        SoLWhitespace *first_nonempty_line
+        Context *active_context,
+        SoLWhitespace *first_nonempty_line,
+        SoLMarkerDetection *marker_detection
 ) {
+    SoLIndentationClassification *classification = ts_malloc(
+        sizeof(SoLIndentationClassification));
+
     // Note: towards-zero rounding, but this is unsigned, so im endeffekt,
     // this is floor division
     uint8_t indentation_level_found;
     uint8_t active_node_level;
+    uint8_t active_list_level;
     bool is_embed;
+    ListStatus list_status;
     uint8_t maybe_indentation_char_repetitions = (
         scanner->indentation_char_repetitions);
     // Note that this gets called literally on the first line, which means
@@ -715,41 +927,91 @@ static SoLNodeStateClassification classify_sol_node_state(
     } else {
         indentation_level_found = 0;
     }
+    classification->sol_indentation_level = indentation_level_found;
 
-    if (active_node == NULL) {
+    if (active_context == NULL) {
         active_node_level = 0;
+        active_list_level = 0;
         is_embed = false;
+        list_status = LSTAT_NO_LIST;
     } else {
-        active_node_level = active_node->node_level;
-        is_embed = active_node->is_embed;
+        active_node_level = active_context->node_level;
+        active_list_level = active_context->list_marker_level;
+        is_embed = active_context->is_embed;
+        list_status = active_context->list_status;
     }
 
     if (is_embed) {
+        assert(list_status == LSTAT_NO_LIST);
         // This is maximally permissive; the extra whitespace will be converted
         // into embed content
         if (indentation_level_found >= active_node_level) {
-            return (SoLNodeStateClassification){SOL_NODE_CONTINUE, 0};
+            classification->sol_indent_action = SOL_INDENT_HELD;
         } else {
-            return (SoLNodeStateClassification){
-                SOL_NODE_END, active_node_level - indentation_level_found};
+            classification->sol_indent_action = SOL_INDENT_DECREASED;
         }
 
+    // NOTE: this means we're **already** within a list -- **not** that we're
+    // about to start one! In this case, we need to add the list level to the
+    // node level to figure out what indentation to expect
+    } else if (list_status != LSTAT_NO_LIST) {
+        uint8_t absolute_marker_level = active_node_level + active_list_level;
+
+        // This is kinda complicated, but the idea is that we always have a
+        // hanging indent for lists. That means we need to check the first row
+        // (where a marker was detected) against the marker level, and any
+        // subsequent rows against one more than the marker level. This block
+        // is for the marker-detected line...
+        if (
+            marker_detection != NULL
+            && marker_detection->detected
+            && (marker_detection->marker == MARKER_OL
+                || marker_detection->marker == MARKER_UNOL)
+        ) {
+            if (indentation_level_found > absolute_marker_level) {
+                classification->sol_indent_action = SOL_INDENT_INCREASED;
+            } else if (indentation_level_found == absolute_marker_level) {
+                classification->sol_indent_action = SOL_INDENT_HELD;
+            } else {
+                classification->sol_indent_action = SOL_INDENT_DECREASED;
+            }
+
+        // ... and this block is for the hanging-indent continuation line
+        } else {
+            uint8_t absolute_hanging_indent_level = absolute_marker_level + 1;
+            if (indentation_level_found > absolute_hanging_indent_level) {
+                classification->sol_indent_action = SOL_INDENT_INCREASED;
+            } else if (indentation_level_found == absolute_hanging_indent_level) {
+                classification->sol_indent_action = SOL_INDENT_HELD;
+            } else {
+                classification->sol_indent_action = SOL_INDENT_DECREASED;
+            }
+        }
+
+    // Note: we're not in a list yet, which means any marker detection is the
+    // START of the marker state. Therefore, we should expect the existing
+    // indentation level (at least at first), and let the parent deal with
+    // the start. Again, these are about the indentation classification,
+    // NOT about the token to schedule!
     } else {
         if (indentation_level_found > active_node_level) {
-            return (SoLNodeStateClassification){SOL_NODE_BEGIN, 1};
+            classification->sol_indent_action = SOL_INDENT_INCREASED;
 
         // This is deliberately going to match even if there's a partial indent
         // **less than** the required amount for a node_begin;
         // peek_and_schedule_sol will only consume the correct amount of
         // indentation, and the rest will be turned into an error in the parser
         } else if (indentation_level_found == active_node_level) {
-            return (SoLNodeStateClassification){SOL_NODE_CONTINUE, 0};
+            classification->sol_indent_action = SOL_INDENT_HELD;
 
         } else {
-            return (SoLNodeStateClassification){
-                SOL_NODE_END, active_node_level - indentation_level_found};
+            classification->sol_indent_action = SOL_INDENT_DECREASED;
         }
     }
+
+    debug(
+        "... Nonempty line classified as %d\n", classification->sol_indent_action);
+    return classification;
 }
 
 
@@ -758,7 +1020,7 @@ static SoLNodeStateClassification classify_sol_node_state(
 //////////////////////////////////////////////////////////////////////////////
 
 
-static void handle_eof(
+static void handle_eof_after_nonempty_line(
         /* Treesitter doesn't give us a formal EoF token, but we may
         need to do a bunch of zero-width tokens here. Therefore, we call
         this as soon as we detect an EoF, and handle everything here.
@@ -769,31 +1031,933 @@ static void handle_eof(
         doesn't feel particularly DRY, but it's ^^just different enough^^
         that is was causing a ton of headaches trying to implement it
         elsewhere.
+
+        **Note that this is only responsible for EoFs that happen at the
+        end of a nonempty line!** Otherwise, it gets handled by
+        peek_and_schedule.
         */
         TSLexer *lexer,
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    // This prevents infinite loops by marking handle_eof as already called.
+    // This prevents infinite loops of zero-width tokens at EoF.
     // It also prevents accidentally calling handle_eof twice after processing
     // an empty line immediately preceeding the EoF.
     scanner->post_eof = true;
 
-    // If you decide you want to make empty lines part of the parent block
-    // instead of the child block, you can simply slide this before the above
-    // EoF empty-and/or-EoL block
-    if (scanner->node_stack->size > 0) {
-        uint8_t current_node_level = (
-            ((Node *)*array_back(scanner->node_stack))->node_level);
-
+    if (scanner->context_stack->size > 0) {
         for (
-            uint8_t node_index = 0;
-            node_index < current_node_level;
-            ++node_index
+            // NOTE: important that this is signed; otherwise we'll never get
+            // to the halting condition, because we'll wrap around to the max
+            // unsigned value, since the condition is checked AFTER the
+            // modification. We could also offset everything by one, and then
+            // un-offset it in the loop, but... this just seems cleaner tbh,
+            // even though it forces us to use 8 extra bits on the stack
+            int16_t context_index = scanner->context_stack->size - 1;
+            context_index >= 0;
+            --context_index
         ) {
-            debug("... scheduling node end from EoF\n");
-            schedule_token(scanner, scan_state, NODE_END, 0, true);
+            debug("... scheduling next token from EoF: --v\n");
+            Context *context_to_popschedule = *array_get(
+                scanner->context_stack, context_index);
+            if (context_to_popschedule->list_status == LSTAT_NO_LIST) {
+                schedule_token(scanner, scan_state, TOKEN_NODE_END, 0, true);
+            } else {
+                schedule_token(scanner, scan_state, TOKEN_LIST_END, 0, true);
+            }
         }
+    }
+}
+
+
+static void schedule_empty_lines(
+        Scanner *scanner,
+        ScanState *scan_state,
+        Array(SoLWhitespace *) * empty_lines
+) {
+    for (
+        uint8_t empty_line_index = 0;
+        empty_line_index < empty_lines->size;
+        ++empty_line_index
+    ) {
+        SoLWhitespace *empty_line = *array_get(
+            empty_lines, empty_line_index);
+        uint16_t empty_line_length = (
+            empty_line->indentation_char_count
+            + empty_line->nih_whitespace_char_count);
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_EMPTY_LINE,
+            empty_line_length,
+            false);
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_EOL,
+            empty_line->empty_line_eol_length,
+            false);
+        ts_free(empty_line);
+    }
+}
+
+
+static void schedule_indentation_increased(
+        /* Here, we're handling scheduling any time the indentation has
+        increased.
+
+        Note that lists cannot be ^^started^^ by an indentation increase --
+        unless the list is the first line of a nested node! Otherwise, they
+        must always be started with an indentation hold. But we might be
+        dropping into a deeper list level -- if and **only if** we're already
+        within a list.
+        */
+        Scanner *scanner,
+        ScanState *scan_state,
+        Context *active_context,
+        SoLIndentationClassification *classification,
+        SoLMarkerDetection *marker_detection,
+        Array(SoLWhitespace *) * empty_lines
+){
+    debug("... scheduling indentation increased\n");
+    // Note: empty lines go before any node/list beginnings, but -- when we implement
+    // formatting -- we'll also need to schedule any formatting pops if
+    // an empty line was detected (und zwar, **before** the empty lines!)
+    schedule_empty_lines(scanner, scan_state, empty_lines);
+
+    // Note: NOT the same as the first_nonempty_line, because we might have
+    // an erroneously long indentation (or be within an embedding)
+    uint16_t np_indentation_level;
+    uint16_t np1_indentation_level;
+    uint8_t np1_list_marker_level;
+    ListStatus list_status;
+    if (active_context == NULL) {
+        np_indentation_level = 0;
+        np1_indentation_level = 1;
+        list_status = LSTAT_NO_LIST;
+        np1_list_marker_level = 0;
+    } else {
+        np_indentation_level = active_context->node_level;
+        np1_indentation_level = np_indentation_level + 1;
+        list_status = active_context->list_status;
+
+        // Note that list marker levels always start at 0! In theory, this
+        // shouldn't be possible here, but since we're doing all of our state
+        // normalization up front, we want to be thorough (and let later code
+        // assert and/or schedule an error sentinel).
+        if (active_context->list_status == LSTAT_NO_LIST) {
+            np1_list_marker_level = 0;
+        } else {
+            np1_list_marker_level = active_context->list_marker_level + 1;
+        }
+    }
+
+    // Easy peasy lemon squeezy: we're not in a list, so this can only be the
+    // start of a new node.
+    if (list_status == LSTAT_NO_LIST) {
+        schedule_token(scanner, scan_state, TOKEN_NODE_BEGIN, 0, true);
+
+        if (scanner->pending_embed_node) {
+            schedule_token(scanner, scan_state, TOKEN_FLAG_EMBED, 0, true);
+
+        // We need to be careful here! Yes, we just had a node start. But
+        // we might also have a list as the first line in the node. So we
+        // still need to check for a marker, and we might still need to handle
+        // a new list starting.
+        } else if (marker_detection != NULL && marker_detection->detected) {
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                np1_indentation_level * scanner->indentation_char_repetitions,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                // By definition, we're starting a new list, so we know this is
+                // a zero
+                0,
+                false);
+
+            if (marker_detection->marker == MARKER_OL) {
+                // And finally, the list index and then marker and then we can get
+                // on with our lives
+                scanner->pending_list_status = LSTAT_OL;
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_MARKER_OL_INDEX,
+                    marker_detection->marker_payload_charcount,
+                    false);
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_MARKER_OL,
+                    2,
+                    false);
+
+            } else {
+                assert(marker_detection->marker == MARKER_UNOL);
+                scanner->pending_list_status = LSTAT_UNOL;
+
+                // And finally, the list marker and then we can get
+                // on with our lives
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_MARKER_UNOL,
+                    2,
+                    false);
+            }
+
+        // Up until now, it's been zero-length tokens to handle indentation
+        // changes, but we can (must!) also schedule the node_continue from
+        // the beginning of the next line
+        } else {
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                np1_indentation_level * scanner->indentation_char_repetitions,
+                false);
+        }
+
+    // Note that it actually doesn't matter what the existing list type is;
+    // a nested list doesn't have any inherent connection to the parent list,
+    // so we can jump between list types at will. We just need to make sure
+    // it matches the marker detection.
+    } else {
+        // If we didn't detect a marker, this is invalid.
+        assert(marker_detection != NULL && marker_detection->detected);
+
+        // Regardless of list type, we need to schedule a nested list begin,
+        // then a node continue for the current node level, and a list continue
+        // for the NEXT list (marker) level. ^^Then^^ comes the marker itself.
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_LIST_BEGIN,
+            0,
+            true);
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_NODE_CONTINUE,
+            np_indentation_level * scanner->indentation_char_repetitions,
+            false);
+        // The list_continue consumes any indentation up to the marker
+        // level; this might be zero-width!
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_LIST_CONTINUE,
+            np1_list_marker_level * scanner->indentation_char_repetitions,
+            false);
+
+        if (marker_detection->marker == MARKER_OL) {
+            // And finally, the list index and then marker and then we can get
+            // on with our lives
+            scanner->pending_list_status = LSTAT_OL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL_INDEX,
+                marker_detection->marker_payload_charcount,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL,
+                2,
+                false);
+
+        } else {
+            assert(marker_detection->marker == MARKER_UNOL);
+            scanner->pending_list_status = LSTAT_UNOL;
+
+            // And finally, the list marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_UNOL,
+                2,
+                false);
+        }
+    }
+}
+
+
+static void schedule_indentation_decreased(
+        /* When an indentation decrease has been detected, this is
+        responsible for scheduling all of the list/node/formatting ends
+        that are associated with it.
+
+        Note: we want to let ``emit_token`` deal with popping the actual
+        contexts. This is just figuring out how many to schedule, and
+        scheduling them.
+        */
+        Scanner *scanner,
+        ScanState *scan_state,
+        Context *active_context,
+        SoLIndentationClassification *classification,
+        SoLMarkerDetection *marker_detection,
+        Array(SoLWhitespace *) * empty_lines
+){
+    debug("... scheduling indentation decreased\n");
+    assert(
+        classification->sol_indent_action == SOL_INDENT_DECREASED
+        || classification->sol_indent_action == SOL_IS_EOF);
+
+    // Note: when formatting gets added, this will still need to unwrap any
+    // active formatting, even though there's no context
+    if (active_context == NULL) {
+        assert(classification->sol_indent_action == SOL_IS_EOF);
+        schedule_empty_lines(scanner, scan_state, empty_lines);
+
+    } else {
+        // MUST BE SIGNED! We're expecting this to be negative, so we need to
+        // avoid wraparound errors!
+        int16_t context_index = scanner->context_stack->size - 1;
+        Context *context_to_check = *array_get(scanner->context_stack, context_index);
+        uint8_t combined_indentation_level = (
+                context_to_check->node_level + context_to_check->list_marker_level); 
+
+        // Here's the easy part: all list levels that are deeper than the
+        // combined marker indentation level cannot possibly be part of that
+        // list level, and can immediately be scheduled for popping.
+        while (
+            context_to_check->list_status != LSTAT_NO_LIST
+            && classification->sol_indentation_level < combined_indentation_level
+        ) {
+            schedule_token(scanner, scan_state, TOKEN_LIST_END, 0, true);
+            context_index -= 1;
+            if (context_index >= 0) {
+                context_to_check = *array_get(
+                    scanner->context_stack, context_index);
+                combined_indentation_level = (
+                    context_to_check->node_level
+                    + context_to_check->list_marker_level);
+            } else {
+                context_to_check = NULL;
+                combined_indentation_level = 0;
+            }
+        }
+
+        // Now the tricky part: if we're still in a list, AND that was exactly
+        // the end of the dedentation, then we have some decisions to make.
+        // List markers happen at their parent node's indentation level, so we
+        // need to check the detection, and we also need to make sure the list
+        // didn't change type. And if we stayed in the list, we also have some
+        // other bookkeeping tokens to emit before we're done.
+        // NOTE THAT THERE MIGHT STILL BE MORE LIST LEVELS ABOVE US!
+        if (
+            context_to_check->list_status != LSTAT_NO_LIST
+            && classification->sol_indentation_level == combined_indentation_level
+        ) {
+            // We backed out to the lowest level of the list, and then we didn't
+            // follow that up with a new list item. That means we're back to
+            // normal node content at the same indentation level as the
+            // now-obsolete marker. Note that this also handles the EoF case!
+            if (marker_detection == NULL || !marker_detection->detected) {
+                schedule_token(scanner, scan_state, TOKEN_LIST_END, 0, true);
+                // We need these in just a minute to do the bookkeeping for
+                // the next line
+                context_index -= 1;
+                if (context_index >= 0) {
+                    context_to_check = *array_get(
+                        scanner->context_stack, context_index);
+                    combined_indentation_level = (
+                        context_to_check->node_level
+                        + context_to_check->list_marker_level);
+                } else {
+                    context_to_check = NULL;
+                    combined_indentation_level = 0;
+                }
+
+            // We backed out to the lowest level of the list, and then swapped
+            // the list type. We need to create a new list!
+            } else if (
+                marker_detection->marker == MARKER_OL
+                && context_to_check->list_status != LSTAT_OL
+            ) {
+                // Note: no change to the context yet; the final bookkeeping
+                // will be purely based on the list_status and marker detection,
+                // so it doesn't matter that we're holding off until emit_token
+                // to update the actual context
+                schedule_token(scanner, scan_state, TOKEN_LIST_END, 0, true);
+                scanner->pending_list_status = LSTAT_OL;
+                schedule_token(scanner, scan_state, TOKEN_LIST_BEGIN, 0, true);
+            // Same as above, but the other swap
+            } else if (
+                marker_detection->marker == MARKER_UNOL
+                && context_to_check->list_status != LSTAT_UNOL
+            ) {
+                // Note: no change to the context yet; the final bookkeeping
+                // will be purely based on the list_status and marker detection,
+                // so it doesn't matter that we're holding off until emit_token
+                // to update the actual context
+                schedule_token(scanner, scan_state, TOKEN_LIST_END, 0, true);
+                scanner->pending_list_status = LSTAT_UNOL;
+                schedule_token(scanner, scan_state, TOKEN_LIST_BEGIN, 0, true);
+            }
+            // Note that if we didn't swap the list type, we can just wait
+            // until the final bookkeeping to sort out continuations and the
+            // new marker (see below)
+        }
+
+        // Back to simple stuff: we're all the way out of the list, but we
+        // still have nodes to end!
+        while (
+            classification->sol_indentation_level < combined_indentation_level
+        ) {
+            schedule_token(scanner, scan_state, TOKEN_NODE_END, 0, true);
+            context_index -= 1;
+            if (context_index >= 0) {
+                context_to_check = *array_get(
+                    scanner->context_stack, context_index);
+                combined_indentation_level = context_to_check->node_level;
+            } else {
+                context_to_check = NULL;
+                combined_indentation_level = 0;
+            }
+        }
+
+        // Okay, now that we've got all of the node/list ends sorted out, we
+        // need to figure out the rest of the bookkeeping for the upcoming
+        // (nonempty) line -- just as soon as we schedule the empty ones.
+        schedule_empty_lines(scanner, scan_state, empty_lines);
+
+        // If the SoL is the EoF, we're going to end up emitting an empty line,
+        // which doesn't need a node_continue. Note that, this is NOT redundant
+        // with the top-level if (active_context == NULL), since we just went
+        // through a bunch of manipulations of the active context!
+        if (classification->sol_indent_action != SOL_IS_EOF) {
+            // In this case we don't even need to worry about list stuff; it's
+            // not possible!
+            if (context_to_check == NULL) {
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_NODE_CONTINUE,
+                    0,
+                    true);
+
+            // Here, though, all we can say is that there IS still a context;
+            // we don't know yet if it's a list or a regular node
+            } else {
+                // Node continues only consume the node indentation, so we
+                // still don't need to check about the list yet. BUT, be
+                // careful: 
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_NODE_CONTINUE,
+                    context_to_check->node_level
+                        * scanner->indentation_char_repetitions,
+                    false);
+
+                // That's the node continuation, but we might still have some
+                // LIST continuations (and also maybe markers!) depending on what
+                // the last context we found was.
+                if (context_to_check->list_status != LSTAT_NO_LIST) {
+                    schedule_token(
+                        scanner,
+                        scan_state,
+                        TOKEN_LIST_CONTINUE,
+                        context_to_check->list_marker_level
+                            * scanner->indentation_char_repetitions,
+                        false);
+
+                    // No marker, but we're still in a list. That means that this
+                    // is a continuation of a previous list level. So we need a
+                    // list continue AND a list hangar, and they'll split the
+                    // indentation
+                    if (
+                        marker_detection == NULL
+                        || !marker_detection->detected
+                    ) {
+                        schedule_token(
+                            scanner,
+                            scan_state,
+                            TOKEN_LIST_HANGAR,
+                            scanner->indentation_char_repetitions,
+                            false);
+                        
+                    // We've already dealt with list switches, so we just need
+                    // to take care of scheduling the marker here
+                    } else if (marker_detection->marker == MARKER_OL) {
+                        schedule_token(
+                            scanner,
+                            scan_state,
+                            TOKEN_MARKER_OL_INDEX,
+                            marker_detection->marker_payload_charcount,
+                            false);
+                        schedule_token(
+                            scanner,
+                            scan_state,
+                            TOKEN_MARKER_OL,
+                            2,
+                            false);
+
+                    // We've already dealt with list switches, so we just need
+                    // to take care of scheduling the marker here
+                    } else {
+                        assert(marker_detection->marker == MARKER_UNOL);
+                        schedule_token(
+                            scanner,
+                            scan_state,
+                            TOKEN_MARKER_UNOL,
+                            2,
+                            false);
+                    }
+                }
+            }
+        }
+    }
+}
+
+
+static void schedule_indentation_held(
+        Scanner *scanner,
+        ScanState *scan_state,
+        Context *active_context,
+        SoLIndentationClassification *classification,
+        SoLMarkerDetection *marker_detection,
+        Array(SoLWhitespace *) * empty_lines
+){
+    debug("... scheduling indentation held\n");
+
+    // Note: NOT the same as the first_nonempty_line, because we might have
+    // an erroneously long indentation (or be within an embedding)
+    uint16_t n_indentation_chars;
+    uint8_t active_list_marker_level;
+    ListStatus list_status;
+    if (active_context == NULL) {
+        n_indentation_chars = 0;
+        list_status = LSTAT_NO_LIST;
+        active_list_marker_level = 0;
+    } else {
+        n_indentation_chars = (
+            active_context->node_level * scanner->indentation_char_repetitions);
+        list_status = active_context->list_status;
+        active_list_marker_level = active_context->list_marker_level;
+    }
+
+    // Empty lines break up the list into a new list
+    if (list_status != LSTAT_NO_LIST && empty_lines->size != 0) {
+        assert(marker_detection != NULL && marker_detection->detected);
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_LIST_END,
+            0,
+            true);
+        schedule_empty_lines(scanner, scan_state, empty_lines);
+
+        if (marker_detection->marker == MARKER_OL) {
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list index and then marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL_INDEX,
+                marker_detection->marker_payload_charcount,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL,
+                2,
+                false);
+
+        } else {
+            assert(marker_detection->marker == MARKER_UNOL);
+            scanner->pending_list_status = LSTAT_UNOL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_UNOL,
+                2,
+                false);
+        }
+        
+    } else if (list_status == LSTAT_OL) {
+        // We're currently in an ordered list, found no marker, but got
+        // classified as an indentation held. That means we're still in a list
+        // item, but we're after the first line, so we need both a list
+        // continue and a list hangar.
+        if (marker_detection == NULL) {
+            assert(scanner->indentation_char_repetitions);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list continue consumes everything up to the marker level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+            // And the list hangar consumes the hanging indent
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_HANGAR,
+                scanner->indentation_char_repetitions,
+                false);
+
+        // We're currently in an ordered list and found a marker for an
+        // ordered list. Since this was also classified as an indentation held,
+        // that means this is simply a new list row.
+        } else if (marker_detection->marker == MARKER_OL) {
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+
+            // The list_continue consumes any indentation up to the marker
+            // level; this might be zero-width!
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list index and then marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL_INDEX,
+                marker_detection->marker_payload_charcount,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL,
+                2,
+                false);
+
+        // We're currently in an ordered list and found a marker for an
+        // UNordered list. Cleancopy doesn't allow mixing the two, so, since
+        // this was also classified as an indentation held, we need to close
+        // the previous ordered list and start a new unordered list.
+        } else {
+            assert(marker_detection->marker == MARKER_UNOL);
+            // These are both zero-width. Positionally, they're at the very
+            // beginning of the first nonempty line.
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_END,
+                0,
+                true);
+            scanner->pending_list_status = LSTAT_UNOL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_UNOL,
+                2,
+                false);
+        }
+
+    } else if (list_status == LSTAT_UNOL) {
+        // We're currently in an unordered list, found no marker, but got
+        // classified as an indentation held. That means we're still in a list
+        // item, but we're after the first line, so we need both a list
+        // continue and a list hangar.
+        if (marker_detection == NULL) {
+            assert(scanner->indentation_char_repetitions);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list continue consumes everything up to the marker level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+            // And the list hangar consumes the hanging indent
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_HANGAR,
+                scanner->indentation_char_repetitions,
+                false);
+            
+        // We're currently in an unordered list and found a marker for an
+        // unordered list. Since this was also classified as an indentation held,
+        // that means this is simply a new list row.
+        } else if (marker_detection->marker == MARKER_UNOL) {
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+
+            // The list_continue consumes any indentation up to the marker
+            // level; this might be zero-width!
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_UNOL,
+                2,
+                false);
+            
+        // We're currently in an UNordered list and found a marker for an
+        // ordered list. Cleancopy doesn't allow mixing the two, so, since
+        // this was also classified as an indentation held, we need to close
+        // the previous ordered list and start a new ordered list.
+        } else {
+            assert(marker_detection->marker == MARKER_OL);
+            // These are both zero-width. Positionally, they're at the very
+            // beginning of the first nonempty line.
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_END,
+                0,
+                true);
+                scanner->pending_list_status = LSTAT_OL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list index and then marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL_INDEX,
+                marker_detection->marker_payload_charcount,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL,
+                2,
+                false);
+        }
+
+    } else if (marker_detection != NULL) {
+        schedule_empty_lines(scanner, scan_state, empty_lines);
+
+        if (marker_detection->marker == MARKER_OL) {
+            scanner->pending_list_status = LSTAT_OL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the list index and then marker and then we can get
+            // on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL_INDEX,
+                marker_detection->marker_payload_charcount,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_OL,
+                2,
+                false);
+            
+        } else {
+            assert(marker_detection->marker == MARKER_UNOL);
+
+            scanner->pending_list_status = LSTAT_UNOL;
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_BEGIN,
+                0,
+                true);
+
+            // The node_continue consumes any indentation up to the node level
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            // The list_continue consumes any indentation up to the marker level
+            // (which might be zero-width)
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_LIST_CONTINUE,
+                active_list_marker_level * scanner->indentation_char_repetitions,
+                false);
+
+            // And finally, the marker and then we can get on with our lives
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_MARKER_UNOL,
+                2,
+                false);
+        }
+
+    // No markers, no lists, no nuttin'. That means this is a plain-jane
+    // content line, and all we need is the NODE_CONTINUE.
+    } else {
+        // Note: empty lines go before any continuations, but we need to be
+        // careful about auto-closing any formatting state, when we get to that
+        // point
+        schedule_empty_lines(scanner, scan_state, empty_lines);
+        // This consumes any indentation up to the node level.
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_NODE_CONTINUE,
+            n_indentation_chars,
+            false);
     }
 }
 
@@ -835,163 +1999,64 @@ static void peek_and_schedule_start_of_line(
     Array(SoLWhitespace *) * empty_lines = ts_malloc(
         sizeof(Array(SoLWhitespace *)));
     array_init(empty_lines);
-    // Default to SOL_NODE_CONTINUE; this only gets used where no indentation
-    // was found at all, which can only be zeroth level node continuation
-    SoLNodeState sol_node_state = SOL_NODE_CONTINUE;
-    Node *active_node = NULL;
-    if (scanner->node_stack->size > 0) {
-        active_node = (Node *)*array_back(scanner->node_stack);
+    Context *active_context = NULL;
+    if (scanner->context_stack->size > 0) {
+        active_context = (Context *)*array_back(scanner->context_stack);
     }
-    uint8_t level_delta = 0;
 
     // If we've never encountered indentation in the file, ever, AND the next
     // character isn't indentation, then we can skip indentation checking
     // and just do empty line checks
     SoLWhitespace *first_nonempty_line = advance_through_empty_lines(
         lexer, scanner, empty_lines);
+    SoLMarkerDetection *marker_detection = NULL;
+    SoLIndentationClassification *classification;
 
     // Note that if we hit this, that means the first non-empty line... was,
     // in fact, actually empty, because it terminated in the EoF. Which means
     // we need an extra empty line, but not until after we handle the rest
     // of the empty lines
     if (lexer->eof(lexer)){
-        handle_eof(lexer, scanner, scan_state, true);
-        sol_node_state = SOL_IS_EOF;
+        // This prevents infinite loops of zero-width tokens at EoF.
+        // It also prevents accidentally calling handle_eof twice after processing
+        // an empty line immediately preceeding the EoF.
+        scanner->post_eof = true;
         array_push(empty_lines, first_nonempty_line);
+        classification = ts_malloc(sizeof(SoLIndentationClassification));
+        classification->sol_indent_action = SOL_IS_EOF;
+        classification->sol_indentation_level = 0;
 
-    // Note that classify_sol_node_state is perfectly capable of handling a
-    // null active_node!
+    // Note that classify_sol_indentation is perfectly capable of handling a
+    // null active_context!
     } else {
+        marker_detection = detect_and_advance_through_SoL_marker(lexer);
         // These can't do anything more than detection, because we might need
         // to reorder some empty lines first
         // Note that these aren't completely trivial because we have embeddings
         // and lists to worry about
-        SoLNodeStateClassification classification = classify_sol_node_state(
-            scanner, active_node, first_nonempty_line);
-
-        sol_node_state = classification.sol_node_state;
-        level_delta = classification.level_delta;
+        classification = classify_sol_indentation(
+            scanner, active_context, first_nonempty_line, marker_detection);
     }
 
-    // Empty lines go AFTER a node_end, including implicit ones at EoF
-    if (sol_node_state == SOL_NODE_END || sol_node_state == SOL_IS_EOF) {
-        for (
-            uint8_t node_ends_scheduled = 0;
-            node_ends_scheduled < level_delta;
-            ++node_ends_scheduled
-        ) {
-            schedule_token(scanner, scan_state, NODE_END, 0, true);
-        }
+    if (
+        classification->sol_indent_action == SOL_INDENT_INCREASED
+    ) {
+        schedule_indentation_increased(
+            scanner, scan_state, active_context, classification,
+            marker_detection, empty_lines);
 
-        for (
-            uint8_t empty_line_index = 0;
-            empty_line_index < empty_lines->size;
-            ++empty_line_index
-        ) {
-            SoLWhitespace *empty_line = *array_get(
-                empty_lines, empty_line_index);
-            uint16_t empty_line_length = (
-                empty_line->indentation_char_count
-                + empty_line->nih_whitespace_char_count);
-            schedule_token(
-                scanner,
-                scan_state,
-                EMPTY_LINE,
-                empty_line_length,
-                false);
-            schedule_token(
-                scanner,
-                scan_state,
-                EOL,
-                empty_line->empty_line_eol_length,
-                false);
-            ts_free(empty_line);
-        }
+    } else if (classification->sol_indent_action == SOL_INDENT_HELD) {
+        schedule_indentation_held(
+            scanner, scan_state, active_context, classification,
+            marker_detection, empty_lines);
 
-        // If the SoL is the EoF, we want to have an empty line, which doesn't
-        // get a node_continue. But otherwise, we can (and should!) already
-        // queue up the next node_continue
-        if (sol_node_state != SOL_IS_EOF) {
-            uint8_t post_dedent_node_level = (
-                first_nonempty_line->indentation_char_count
-                / scanner->indentation_char_repetitions);
-
-            schedule_token(
-                scanner,
-                scan_state,
-                NODE_CONTINUE,
-                // Yes, this looks redundant -- but it isn't. We're actually
-                // rounding it to the whole indentation level, so we don't
-                // consume too much whitespace if there's a partial indentation
-                post_dedent_node_level * scanner->indentation_char_repetitions,
-                false);
-        }
-
-    // Empty lines go BEFORE node_continue and node_begin
     } else {
-        for (
-            uint8_t empty_line_index = 0;
-            empty_line_index < empty_lines->size;
-            ++empty_line_index
-        ) {
-            SoLWhitespace *empty_line = *array_get(
-                empty_lines, empty_line_index);
-            uint16_t empty_line_length = (
-                empty_line->indentation_char_count
-                + empty_line->nih_whitespace_char_count);
-            schedule_token(
-                scanner,
-                scan_state,
-                EMPTY_LINE,
-                empty_line_length,
-                false);
-            schedule_token(
-                scanner,
-                scan_state,
-                EOL,
-                empty_line->empty_line_eol_length,
-                false);
-            ts_free(empty_line);
-        }
-
-        // Note: NOT the same as the first_nonempty_line, because we might have
-        // an erroneously long indentation (or be within an embedding)
-        uint16_t np1_indentation_chars;
-        uint16_t n_indentation_chars;
-        if (active_node == NULL) {
-            n_indentation_chars = 0;
-            np1_indentation_chars = scanner->indentation_char_repetitions;
-        } else {
-            n_indentation_chars = (
-                active_node->node_level * scanner->indentation_char_repetitions);
-            np1_indentation_chars = (
-                n_indentation_chars + scanner->indentation_char_repetitions);
-        }
-
-        // If it's a node_begin, we can also schedule the node_continue from
-        // the beginning of the line
-        if (sol_node_state == SOL_NODE_BEGIN) {
-            schedule_token(scanner, scan_state, NODE_BEGIN, 0, true);
-
-            if (scanner->pending_embed_node) {
-                schedule_token(scanner, scan_state, FLAG_EMBED, 0, true);
-            }
-
-            schedule_token(
-                scanner,
-                scan_state,
-                NODE_CONTINUE,
-                np1_indentation_chars,
-                false);
-
-        } else {
-            schedule_token(
-                scanner,
-                scan_state,
-                NODE_CONTINUE,
-                n_indentation_chars,
-                false);
-        }
+        assert(
+            classification->sol_indent_action == SOL_IS_EOF
+            || classification->sol_indent_action == SOL_INDENT_DECREASED);
+        schedule_indentation_decreased(
+            scanner, scan_state, active_context, classification,
+            marker_detection, empty_lines);
     }
 
     array_delete(empty_lines);
@@ -1024,7 +2089,7 @@ static void detect_and_schedule_eol(
         // check for the immediately following EoF immediately after
         // scheduling!
         consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(scanner, scan_state, EOL, maybe_eol_characters, true);
+        schedule_token(scanner, scan_state, TOKEN_EOL, maybe_eol_characters, true);
 
         debug("... peeking ahead; don't mind me!\n");
         // The docstring for peek_and_schedule_SoL explains this thoroughly
@@ -1052,7 +2117,7 @@ static void detect_and_schedule_node_def(
         ScanState *scan_state
 ) {
     if (lexer->lookahead == UNICHR_NODEDEF_SYMBOL) {
-        schedule_token(scanner, scan_state, NODE_DEF, 1, false);
+        schedule_token(scanner, scan_state, TOKEN_NODE_DEF, 1, false);
     }
 }
 
@@ -1072,7 +2137,7 @@ static void detect_and_schedule_empty_node(
 ) {
     if (lexer->lookahead == UNICHR_EMPTY_NODE_SYMBOL) {
         scanner->pending_embed_node = false;
-        schedule_token(scanner, scan_state, NODE_EMPTY, 1, false);
+        schedule_token(scanner, scan_state, TOKEN_NODE_EMPTY, 1, false);
     }
 }
 
@@ -1169,7 +2234,7 @@ static void detect_and_schedule_node_metadata_key(
 
     if (charcount) {
         consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(scanner, scan_state, METADATA_KEY, charcount, true);
+        schedule_token(scanner, scan_state, TOKEN_METADATA_KEY, charcount, true);
     }
 }
 
@@ -1190,7 +2255,7 @@ static void detect_and_schedule_nih_whitespace(
         lexer->get_column(lexer) != 0
         && is_horizontal_whitespace(lexer->lookahead)
     ) {
-        schedule_token(scanner, scan_state, NIH_WHITESPACE, 1, false);
+        schedule_token(scanner, scan_state, TOKEN_NIH_WHITESPACE, 1, false);
     }
 }
 
@@ -1211,7 +2276,7 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     // valid. We're not currently set up to handle that, so simply return false.
     // NOTE: if you see an infinite loop during parsing, and this line isn't up
     // top, THIS MIGHT BE THE CAUSE!
-    if (valid_symbols[_ERROR_SENTINEL]) { 
+    if (valid_symbols[_TOKEN_ERROR_SENTINEL]) { 
         debug("!!! ERROR SENTINEL!\n");
         return false; }
 
@@ -1235,7 +2300,7 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     // the eof.
     if (scanner->post_eof) {
         // printf(">>> found post_eof\n");
-        schedule_token(scanner, scan_state, EoF, 0, false);
+        schedule_token(scanner, scan_state, TOKEN_EOF, 0, false);
 
     } else {
 
@@ -1243,16 +2308,16 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         // peek_and_schedule_start_of_line. If we hit the EoF at the end of
         // a normal line, we need to handle it here.
         if (lexer->eof(lexer)) {
-            schedule_token(scanner, scan_state, EOL, 0, true);
-            handle_eof(lexer, scanner, scan_state, false);
+            schedule_token(scanner, scan_state, TOKEN_EOL, 0, true);
+            handle_eof_after_nonempty_line(lexer, scanner, scan_state, false);
 
         // But do note that if we're at the EoF, all other tokens are invalid, and
         // should be skipped (to help avoid errors and weird states)
         } else {
             // debug("--- checkpoint1. valid symbols:\n");
             // for (
-            //     size_t i = _ERROR_SENTINEL;
-            //     i <= AUTOCLOSE_WARNING;
+            //     size_t i = _TOKEN_ERROR_SENTINEL;
+            //     i <= TOKEN_AUTOCLOSE_WARNING;
             //     i++
             // ) {
             //     debug("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
@@ -1270,19 +2335,19 @@ bool tree_sitter_cleancopy_external_scanner_scan(
             // node info from the scanner).
             // I'm not 100% sure why, but currently this needs to be before the
             // node metadata sentinel.
-            if (can_parse(scan_state, (TokenType[1]){NODE_EMPTY})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_EMPTY})){
                 detect_and_schedule_empty_node(lexer, scanner, scan_state);}
             // We use this sentinel to force treesitter into our external scanner,
             // so we can examine the metadata key, and decide whether it indicates
             // a pending embed node
-            if (can_parse(scan_state, (TokenType[1]){METADATA_KEY})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_METADATA_KEY})){
                 detect_and_schedule_node_metadata_key(lexer, scanner, scan_state);}
 
-            if (can_parse(scan_state, (TokenType[1]){EOL})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_EOL})){
                 detect_and_schedule_eol(lexer, scanner, scan_state);}
-            if (can_parse(scan_state, (TokenType[1]){NODE_DEF})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_DEF})){
                 detect_and_schedule_node_def(lexer, scanner, scan_state);}
-            if (can_parse(scan_state, (TokenType[1]){NIH_WHITESPACE})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NIH_WHITESPACE})){
                 detect_and_schedule_nih_whitespace(lexer, scanner, scan_state);}
         }
     }
@@ -1344,26 +2409,26 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
         _SCANNER_FIELD_LENGTHS[5]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[5];
 
-    unsigned node_stack_count = scanner->node_stack->size;
-    size_t node_size = sizeof(Node);
-    size_t node_stack_size = node_size * node_stack_count;
+    unsigned context_stack_count = scanner->context_stack->size;
+    size_t context_size = sizeof(Context);
+    size_t context_stack_size = context_size * context_stack_count;
     memcpy(
         &buffer[buffer_offset],
-        &node_stack_size,
+        &context_stack_size,
         sizeof(size_t));
     buffer_offset += sizeof(size_t);
 
     for (
-        unsigned node_index = 0;
-        node_index < node_stack_count;
-        ++node_index
+        unsigned context_index = 0;
+        context_index < context_stack_count;
+        ++context_index
     ) {
-        Node *node = *array_get(scanner->node_stack, node_index);
+        Context *context = *array_get(scanner->context_stack, context_index);
         memcpy(
             &buffer[buffer_offset],
-            node,
-            node_size);
-        buffer_offset += node_size;
+            context,
+            context_size);
+        buffer_offset += context_size;
     }
 
     unsigned token_backlog_count = scanner->token_backlog->size;
@@ -1399,7 +2464,7 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
         unsigned length
 ) {
     Scanner *scanner = (Scanner *)payload;
-    array_init(scanner->node_stack);
+    array_init(scanner->context_stack);
     array_init(scanner->token_backlog);
 
     if (length == 0) { return; }
@@ -1442,23 +2507,23 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
         _SCANNER_FIELD_LENGTHS[5]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[5];
 
-    size_t node_size = sizeof(Node);
-    size_t node_stack_size;
+    size_t context_size = sizeof(Context);
+    size_t context_stack_size;
     memcpy(
-        &node_stack_size,
+        &context_stack_size,
         &buffer[buffer_offset],
         sizeof(size_t));
     buffer_offset += sizeof(size_t);
 
-    size_t node_stack_end = buffer_offset + node_stack_size;
-    while (buffer_offset < node_stack_end) {
-        Node *copied_node = ts_malloc(node_size);
+    size_t context_stack_end = buffer_offset + context_stack_size;
+    while (buffer_offset < context_stack_end) {
+        Context *copied_context = ts_malloc(context_size);
         memcpy(
-            copied_node,
+            copied_context,
             &buffer[buffer_offset],
-            node_size);
-        array_push(scanner->node_stack, copied_node);
-        buffer_offset += node_size;
+            context_size);
+        array_push(scanner->context_stack, copied_context);
+        buffer_offset += context_size;
     }
 
     size_t pending_token_size = sizeof(PendingToken);

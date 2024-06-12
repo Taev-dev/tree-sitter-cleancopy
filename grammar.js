@@ -12,7 +12,11 @@ module.exports = grammar({
     // the grammar. I've even tried grammars I'm 99% sure are conflict-free.
     // It just doesn't work. But for whatever fucking reason, this does the
     // trick.
-    conflicts: ($) => [[$.node_title], [$.node_metadata]],
+    conflicts: ($) => [
+        [$.node_title],
+        [$.node_metadata],
+        [$.unordered_list_item],
+        [$.ordered_list_item]],
 
     rules: {
         document: $ => seq(
@@ -33,12 +37,53 @@ module.exports = grammar({
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
         _node_segments: $ => seq(
-            choice($.content_line, $.node),
-            repeat(choice($.empty_line, $.content_line, $.node))),
+            choice($.content_line, $._list, $.node),
+            repeat(choice($.empty_line, $.content_line, $._list, $.node))),
 
         _embedding_segments: $ => seq(
             $.embedding_line,
             repeat(choice($.embedding_line, $.empty_line))),
+
+        _list: $ => seq(
+            $._ext_list_begin,
+            choice($.ordered_list, $.unordered_list),
+            $._ext_list_end),
+
+        ordered_list: $ => repeat1($.ordered_list_item),
+        unordered_list: $ => repeat1($.unordered_list_item),
+
+        ordered_list_item: $ => seq(
+            $._ext_node_continue,
+            $._ext_list_continue,
+            field('index', $._ext_ol_index),
+            $._ext_ol_marker,
+            repeat($._ext_nih_whitespace),
+            $.inline_richtext,
+            $._eol,
+            repeat(choice(
+                seq(
+                    $._ext_node_continue,
+                    $._ext_list_continue,
+                    $._ext_list_hangar,
+                    $.inline_richtext,
+                    $._eol),
+                $._list))),
+
+        unordered_list_item: $ => seq(
+            $._ext_node_continue,
+            $._ext_list_continue,
+            $._ext_ul_marker,
+            repeat($._ext_nih_whitespace),
+            $.inline_richtext,
+            $._eol,
+            repeat(choice(
+                seq(
+                    $._ext_node_continue,
+                    $._ext_list_continue,
+                    $._ext_list_hangar,
+                    $.inline_richtext,
+                    $._eol),
+                $._list))),
 
         node: $ => seq(
             field('title', $.node_title),
@@ -210,6 +255,14 @@ module.exports = grammar({
         $._ext_node_continue,
         $._ext_node_begin,
         $._ext_node_end,
+        $._ext_list_continue,
+        $._ext_list_hangar,
+        $._ext_list_begin,
+        $._ext_list_end,
+        $._ext_ol_index,
+        $._ext_ol_marker,
+        $._ext_ul_marker,
+
         $._ext_eof,
         $.autoclose_warning
     ],
