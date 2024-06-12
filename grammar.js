@@ -29,7 +29,6 @@ module.exports = grammar({
         // have a node title line with whitespace but no title. In this case,
         // we want the EoL to swallow the whitespace.
         _eol: $ => seq(repeat(prec(2, $._ext_nih_whitespace)), $._ext_eol),
-        nih_whitespace: $ => prec.right(repeat1(prec(1, $._ext_nih_whitespace))),
         // Note: _ext_eol is intentional here; we don't want to twice consume
         // optional trailing whitespace
         empty_line: $ => seq($._ext_empty_line, $._ext_eol),
@@ -37,12 +36,12 @@ module.exports = grammar({
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
         _node_segments: $ => seq(
-            choice($.content_line, $._list, $.node),
-            repeat(choice($.empty_line, $.content_line, $._list, $.node))),
+            choice($._richtext_line_incl_ws, $._list, $.node),
+            repeat(choice($.empty_line, $._richtext_line_incl_ws, $._list, $.node))),
 
         _embedding_segments: $ => seq(
-            $.embedding_line,
-            repeat(choice($.embedding_line, $.empty_line))),
+            $._embedding_line_incl_ws,
+            repeat(choice($._embedding_line_incl_ws, $.empty_line))),
 
         _list: $ => seq(
             $._ext_list_begin,
@@ -58,14 +57,14 @@ module.exports = grammar({
             field('index', $._ext_ol_index),
             $._ext_ol_marker,
             repeat($._ext_nih_whitespace),
-            $.inline_richtext,
+            $.richtext_line,
             $._eol,
             repeat(choice(
                 seq(
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    $.inline_richtext,
+                    $.richtext_line,
                     $._eol),
                 $._list))),
 
@@ -74,14 +73,14 @@ module.exports = grammar({
             $._ext_list_continue,
             $._ext_ul_marker,
             repeat($._ext_nih_whitespace),
-            $.inline_richtext,
+            $.richtext_line,
             $._eol,
             repeat(choice(
                 seq(
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    $.inline_richtext,
+                    $.richtext_line,
                     $._eol),
                 $._list))),
 
@@ -119,30 +118,30 @@ module.exports = grammar({
         node_title_line: $ => seq(
             $._ext_node_continue,
             $._ext_node_def_symbol,
-            repeat($.nih_whitespace),
-            optional($.inline_richtext),
+            repeat($._ext_nih_whitespace),
+            optional($.richtext_line),
             $._eol),
 
         node_metadata_declaration_line: $ => seq(
             $._ext_node_continue,
             $.node_metadata_key,
             $._SYMBOL_METADATA_ASSIGNMENT,
-            repeat($.nih_whitespace),
+            repeat($._ext_nih_whitespace),
             $.metadata_value,
             $._eol),
 
-        content_line: $ => seq(
-            $._ext_node_continue, $.inline_richtext, $._eol),
+        _richtext_line_incl_ws: $ => seq(
+            $._ext_node_continue, $.richtext_line, $._eol),
 
-        embedding_line: $ => seq(
-            $._ext_node_continue, $.inline_embedding, $._eol),
+        _embedding_line_incl_ws: $ => seq(
+            $._ext_node_continue, $.embedding_line, $._eol),
 
         // Note: this gets used in both content lines and in titles, however,
         // it **does not** include lists!
         // TODO: this should be a non-terminal, and support all of the
         // formatting etc
-        inline_richtext: $ => /[^\n]+/,
-        inline_embedding: $ => /[^\n]+/,
+        richtext_line: $ => /[^\n]+/,
+        embedding_line: $ => /[^\n]+/,
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing

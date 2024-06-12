@@ -11,12 +11,10 @@ foo_bar: 'some embed type'
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (STRING1)))))
     (empty_line))
@@ -35,13 +33,11 @@ Metadata, generic string1 key, string1 value
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key
                     (STRING1))
-                (nih_whitespace)
                 (metadata_value
                     (STRING1)))))
     (empty_line))
@@ -60,12 +56,10 @@ foo: "bar"
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (STRING2)))))
     (empty_line))
@@ -85,12 +79,10 @@ foo: 'bar'
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (STRING1)
                     (STRING1)))))
@@ -110,12 +102,10 @@ foo: true
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (TRUE)))))
     (empty_line))
@@ -134,12 +124,10 @@ foo: null
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (NULL)))))
     (empty_line))
@@ -158,12 +146,10 @@ foo: __missing__
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (MISSING)))))
     (empty_line))
@@ -182,12 +168,10 @@ foo: 123
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (integer)))))
     (empty_line))
@@ -206,12 +190,10 @@ foo: 123.456
     (node
         (node_title
             (node_title_line
-                (nih_whitespace)
-                (inline_richtext)))
+                (richtext_line)))
         (node_metadata
             (node_metadata_declaration_line
                 (node_metadata_key)
-                (nih_whitespace)
                 (metadata_value
                     (decimal)))))
     (empty_line))

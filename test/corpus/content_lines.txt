@@ -7,10 +7,8 @@ nothing else.
 ---
 
 (document
-    (content_line
-        (inline_richtext))
-    (content_line
-        (inline_richtext))
+    (richtext_line)
+    (richtext_line)
     (empty_line))
 
 ==================
@@ -22,10 +20,8 @@ nothing else. Like above, but the empty line at the end has whitespace in it.
 ---
 
 (document
-    (content_line
-        (inline_richtext))
-    (content_line
-        (inline_richtext))
+    (richtext_line)
+    (richtext_line)
     (empty_line))
 
 
@@ -37,7 +33,5 @@ nothing else.
 ---
 
 (document
-    (content_line
-        (inline_richtext))
-    (content_line
-        (inline_richtext)))
+    (richtext_line)
+    (richtext_line))
