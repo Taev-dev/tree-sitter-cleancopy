@@ -1,5 +1,10 @@
 [
   {
+    "type": "annotation_line",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "decimal",
     "named": true,
     "fields": {}
@@ -12,6 +17,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "annotation_line",
+          "named": true
+        },
         {
           "type": "empty_line",
           "named": true
@@ -106,6 +115,10 @@
         "required": false,
         "types": [
           {
+            "type": "annotation_line",
+            "named": true
+          },
+          {
             "type": "empty_line",
             "named": true
           },
@@ -171,6 +184,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "annotation_line",
+          "named": true
+        },
         {
           "type": "empty_line",
           "named": true
@@ -278,6 +295,10 @@
       "required": true,
       "types": [
         {
+          "type": "annotation_line",
+          "named": true
+        },
+        {
           "type": "ordered_list",
           "named": true
         },
@@ -291,11 +312,6 @@
         }
       ]
     }
-  },
-  {
-    "type": "richtext_line",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "unordered_list",
@@ -320,6 +336,10 @@
       "multiple": true,
       "required": true,
       "types": [
+        {
+          "type": "annotation_line",
+          "named": true
+        },
         {
           "type": "ordered_list",
           "named": true
@@ -366,6 +386,10 @@
   },
   {
     "type": "TRUE",
+    "named": true
+  },
+  {
+    "type": "richtext_line",
     "named": true
   }
 ]

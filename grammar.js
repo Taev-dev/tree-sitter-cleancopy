@@ -15,6 +15,7 @@ module.exports = grammar({
     conflicts: ($) => [
         [$.node_title],
         [$.node_metadata],
+        [$.annotation_line],
         [$.unordered_list_item],
         [$.ordered_list_item]],
 
@@ -36,8 +37,12 @@ module.exports = grammar({
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
         _node_segments: $ => seq(
-            choice($._richtext_line_incl_ws, $._list, $.node),
-            repeat(choice($.empty_line, $._richtext_line_incl_ws, $._list, $.node))),
+            choice(
+                $._annotation_line_incl_ws,
+                $._richtext_line_incl_ws, $._list, $.node),
+            repeat(choice(
+                $.empty_line, $._annotation_line_incl_ws,
+                $._richtext_line_incl_ws, $._list, $.node))),
 
         _embedding_segments: $ => seq(
             $._embedding_line_incl_ws,
@@ -64,7 +69,7 @@ module.exports = grammar({
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    $.richtext_line,
+                    choice($.richtext_line, $.annotation_line),
                     $._eol),
                 $._list))),
 
@@ -80,7 +85,7 @@ module.exports = grammar({
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    $.richtext_line,
+                    choice($.richtext_line, $.annotation_line),
                     $._eol),
                 $._list))),
 
@@ -110,8 +115,11 @@ module.exports = grammar({
         // Word to the wise: don't try and enforce only-1-ID-line here.
         // You'll regret it! Do it when converting the CST -> AST.
         node_metadata: $ => seq(
-            $.node_metadata_declaration_line,
-            repeat(choice($.empty_line, $.node_metadata_declaration_line))),
+            choice($._annotation_line_incl_ws, $.node_metadata_declaration_line),
+            repeat(choice(
+                $.empty_line,
+                $.node_metadata_declaration_line,
+                $._annotation_line_incl_ws))),
 
         // Note that the node title marker is ambiguous with the node line
         // content
@@ -135,13 +143,26 @@ module.exports = grammar({
 
         _embedding_line_incl_ws: $ => seq(
             $._ext_node_continue, $.embedding_line, $._eol),
+        _annotation_line_incl_ws: $ => seq(
+            $._ext_node_continue, $.annotation_line, $._eol),
 
         // Note: this gets used in both content lines and in titles, however,
         // it **does not** include lists!
         // TODO: this should be a non-terminal, and support all of the
         // formatting etc
         richtext_line: $ => /[^\n]+/,
-        embedding_line: $ => /[^\n]+/,
+
+        // Both embeddings and annotations are taken completely out-of-band
+        // until the end of the line. Note that we can't have two identical
+        // terminals, because tree-sitter works from the bottom up, so as soon
+        // as it lexes one of them to be valid, it's stuck there, and refuses
+        // to try the other version of the terminal. 
+        _out_of_band_until_eol_char: $ => /[^\n]/,
+        embedding_line: $ => repeat1($._out_of_band_until_eol_char),
+        annotation_line: $ => seq(
+            $._ext_annotation_marker,
+            repeat($._ext_nih_whitespace),
+            field('comment', repeat($._out_of_band_until_eol_char))),
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing
@@ -261,7 +282,7 @@ module.exports = grammar({
         $._ext_ol_index,
         $._ext_ol_marker,
         $._ext_ul_marker,
-
+        $._ext_annotation_marker,
         $._ext_eof,
         $.autoclose_warning
     ],

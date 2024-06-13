@@ -1,0 +1,172 @@
+==================
+Root node annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then an annotation line.
+## Because sometimes we want to add comments!
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (annotation_line)
+    (empty_line))
+
+
+==================
+Node-1 first-line annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then an annotation line.
+> Pseudo-empty node
+    ## Because sometimes we want to add comments!
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line)))
+        (annotation_line))
+    (empty_line))
+
+
+==================
+Node-1 second-line annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then an annotation line.
+> Pseudo-empty node
+    With some normal node content
+    ## And then an annotation
+    Followed by more normal node stuff
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line)))
+        (richtext_line)
+        (annotation_line)
+        (richtext_line))
+    (empty_line))
+
+
+==================
+Root in-list (UNOL-1) annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then...
+++  a list
+    ## with an annotation
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (unordered_list
+        (unordered_list_item
+            (richtext_line)
+            (annotation_line)))
+    (empty_line))
+
+
+==================
+Root in-list (UNOL-1) interstitial annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then...
+++  a list
+    ## with an annotation
+    in the middle of a list item
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (unordered_list
+        (unordered_list_item
+            (richtext_line)
+            (annotation_line)
+            (richtext_line)))
+    (empty_line))
+
+
+==================
+Root in-list (OL-1) annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then...
+1.. a list
+    ## with an annotation
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (ordered_list
+        (ordered_list_item
+            (richtext_line)
+            (annotation_line)))
+    (empty_line))
+
+
+==================
+Root after-list (UNOL-1) annotation w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then...
+++  a list
+## with an annotation immediately following
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (unordered_list
+        (unordered_list_item
+            (richtext_line)))
+    (annotation_line)
+    (empty_line))
+
+
+==================
+Node-2 annotation forcing dedent w/ trailing emptyline
+==================
+This is a simple cleancopy document with plain text in the root node and
+then some other stuff:
+> First, NODE-1
+    > Then, NODE-2
+        Along with some content
+
+    ## And now an annotation forcing back out to node-1
+
+---
+
+(document
+    (richtext_line)
+    (richtext_line)
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line)))
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line)))
+            (richtext_line))
+        (empty_line)
+        (annotation_line))
+    (empty_line))

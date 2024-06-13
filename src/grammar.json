@@ -91,6 +91,10 @@
           "members": [
             {
               "type": "SYMBOL",
+              "name": "_annotation_line_incl_ws"
+            },
+            {
+              "type": "SYMBOL",
               "name": "_richtext_line_incl_ws"
             },
             {
@@ -111,6 +115,10 @@
               {
                 "type": "SYMBOL",
                 "name": "empty_line"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_annotation_line_incl_ws"
               },
               {
                 "type": "SYMBOL",
@@ -253,8 +261,17 @@
                     "name": "_ext_list_hangar"
                   },
                   {
-                    "type": "SYMBOL",
-                    "name": "richtext_line"
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "richtext_line"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "annotation_line"
+                      }
+                    ]
                   },
                   {
                     "type": "SYMBOL",
@@ -322,8 +339,17 @@
                     "name": "_ext_list_hangar"
                   },
                   {
-                    "type": "SYMBOL",
-                    "name": "richtext_line"
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "richtext_line"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "annotation_line"
+                      }
+                    ]
                   },
                   {
                     "type": "SYMBOL",
@@ -463,8 +489,17 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "SYMBOL",
-          "name": "node_metadata_declaration_line"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "_annotation_line_incl_ws"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "node_metadata_declaration_line"
+            }
+          ]
         },
         {
           "type": "REPEAT",
@@ -478,6 +513,10 @@
               {
                 "type": "SYMBOL",
                 "name": "node_metadata_declaration_line"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_annotation_line_incl_ws"
               }
             ]
           }
@@ -586,13 +625,64 @@
         }
       ]
     },
+    "_annotation_line_incl_ws": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_ext_node_continue"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "annotation_line"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_eol"
+        }
+      ]
+    },
     "richtext_line": {
       "type": "PATTERN",
       "value": "[^\\n]+"
     },
-    "embedding_line": {
+    "_out_of_band_until_eol_char": {
       "type": "PATTERN",
-      "value": "[^\\n]+"
+      "value": "[^\\n]"
+    },
+    "embedding_line": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_out_of_band_until_eol_char"
+      }
+    },
+    "annotation_line": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_ext_annotation_marker"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_ext_nih_whitespace"
+          }
+        },
+        {
+          "type": "FIELD",
+          "name": "comment",
+          "content": {
+            "type": "REPEAT",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_out_of_band_until_eol_char"
+            }
+          }
+        }
+      ]
     },
     "node_metadata_key": {
       "type": "CHOICE",
@@ -917,6 +1007,9 @@
       "node_metadata"
     ],
     [
+      "annotation_line"
+    ],
+    [
       "unordered_list_item"
     ],
     [
@@ -996,6 +1089,10 @@
     {
       "type": "SYMBOL",
       "name": "_ext_ul_marker"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_annotation_marker"
     },
     {
       "type": "SYMBOL",
