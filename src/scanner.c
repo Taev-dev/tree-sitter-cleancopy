@@ -1532,7 +1532,10 @@ static void schedule_indentation_decreased(
                     0,
                     true);
 
-                if (marker_detection->marker == MARKER_ANNOTATION) {
+                if (
+                    marker_detection != NULL && marker_detection->detected
+                    && marker_detection->marker == MARKER_ANNOTATION
+                ) {
                     schedule_token(
                         scanner,
                         scan_state,
@@ -1556,7 +1559,10 @@ static void schedule_indentation_decreased(
                     false);
 
                 if (context_to_check->list_status == LSTAT_NO_LIST) {
-                    if (marker_detection->marker == MARKER_ANNOTATION) {
+                    if (
+                        marker_detection != NULL && marker_detection->detected
+                        && marker_detection->marker == MARKER_ANNOTATION
+                    ) {
                         schedule_token(
                             scanner,
                             scan_state,
@@ -1619,6 +1625,8 @@ static void schedule_indentation_decreased(
                             false);
 
                     } else {
+                        assert(marker_detection != NULL);
+                        assert(marker_detection->detected);
                         assert(marker_detection->marker == MARKER_ANNOTATION);
                         schedule_token(
                             scanner,
