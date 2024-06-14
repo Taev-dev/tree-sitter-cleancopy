@@ -40,6 +40,16 @@ typedef enum {
     TOKEN_MARKER_UNOL,
     TOKEN_MARKER_ANNOTATION,
     TOKEN_EOF,
+
+    TOKEN_FMT_ESCAPE_PIPE,
+    TOKEN_FMT_ESCAPE_BACKSLASH,
+    TOKEN_FMT_CODE,
+    TOKEN_FMT_UNDERLINE,
+    TOKEN_FMT_STRONG,
+    TOKEN_FMT_EMPHASIS,
+    TOKEN_FMT_STRIKE,
+    
+
     TOKEN_AUTOCLOSE_WARNING,
 } TokenType;
 const char* _TokenNames[] = {
@@ -63,6 +73,13 @@ const char* _TokenNames[] = {
     "MARKER_UNOL",
     "MARKER_ANNOTATION",
     "EoF",
+    "FMT_ESCAPE_PIPE",
+    "FMT_ESCAPE_BACKSLASH",
+    "FMT_CODE",
+    "FMT_UNDERLINE",
+    "FMT_STRONG",
+    "FMT_EMPHASIS",
+    "FMT_STRIKE",
     "AUTOCLOSE_WARNING"};
 
 

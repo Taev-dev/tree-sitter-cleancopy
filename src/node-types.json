@@ -64,6 +64,26 @@
     "fields": {}
   },
   {
+    "type": "mention",
+    "named": true,
+    "fields": {
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "STRING1",
+            "named": true
+          },
+          {
+            "type": "STRING2",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "metadata_value",
     "named": true,
     "fields": {},
@@ -101,6 +121,22 @@
         },
         {
           "type": "integer",
+          "named": true
+        },
+        {
+          "type": "mention",
+          "named": true
+        },
+        {
+          "type": "ref",
+          "named": true
+        },
+        {
+          "type": "tag",
+          "named": true
+        },
+        {
+          "type": "variable",
           "named": true
         }
       ]
@@ -314,6 +350,46 @@
     }
   },
   {
+    "type": "ref",
+    "named": true,
+    "fields": {
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "STRING1",
+            "named": true
+          },
+          {
+            "type": "STRING2",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "tag",
+    "named": true,
+    "fields": {
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "STRING1",
+            "named": true
+          },
+          {
+            "type": "STRING2",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "unordered_list",
     "named": true,
     "fields": {},
@@ -356,12 +432,48 @@
     }
   },
   {
+    "type": "variable",
+    "named": true,
+    "fields": {
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "STRING1",
+            "named": true
+          },
+          {
+            "type": "STRING2",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "version_comment",
     "named": true,
     "fields": {}
   },
   {
+    "type": "#",
+    "named": false
+  },
+  {
+    "type": "$",
+    "named": false
+  },
+  {
+    "type": "&",
+    "named": false
+  },
+  {
     "type": ".",
+    "named": false
+  },
+  {
+    "type": "@",
     "named": false
   },
   {

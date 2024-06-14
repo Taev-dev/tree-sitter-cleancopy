@@ -151,18 +151,19 @@ module.exports = grammar({
         // TODO: this should be a non-terminal, and support all of the
         // formatting etc
         richtext_line: $ => /[^\n]+/,
+        
 
-        // Both embeddings and annotations are taken completely out-of-band
-        // until the end of the line. Note that we can't have two identical
-        // terminals, because tree-sitter works from the bottom up, so as soon
-        // as it lexes one of them to be valid, it's stuck there, and refuses
-        // to try the other version of the terminal. 
-        _out_of_band_until_eol_char: $ => /[^\n]/,
-        embedding_line: $ => repeat1($._out_of_band_until_eol_char),
+        // Plaintext chars ... explicitly forbid newline, though I guess
+        // because of the way we're always throwing things to the external
+        // scanner, this probably isn't necessary? At any rate, we can't really
+        // have duplicate terminals in tree-sitter, so this gets used anywhere
+        // we need plaintext
+        _plaintext_char: $ => /[^\n]/,
+        embedding_line: $ => repeat1($._plaintext_char),
         annotation_line: $ => seq(
             $._ext_annotation_marker,
             repeat($._ext_nih_whitespace),
-            field('comment', repeat($._out_of_band_until_eol_char))),
+            field('comment', repeat($._plaintext_char))),
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing
@@ -179,7 +180,11 @@ module.exports = grammar({
             $.integer,
             $.decimal,
             $.NULL,
-            $.MISSING
+            $.MISSING,
+            $.mention,
+            $.tag,
+            $.variable,
+            $.ref
             // TODO: mappings and sequences!
             ),
         uni_letter: $ => /\p{L}/u,
@@ -203,6 +208,15 @@ module.exports = grammar({
         uni_backtick: $ => '`',
         uni_asterisk: $ => '*',
 
+        _string: $ => choice(
+            seq(
+                $._SYMBOL_SINGLE_QUOTE,
+                $.STRING1,
+                $._SYMBOL_SINGLE_QUOTE),
+            seq(
+                $._SYMBOL_DOUBLE_QUOTE,
+                $.STRING2,
+                $._SYMBOL_DOUBLE_QUOTE)),
         _string_multiline: $ => choice(
             seq(
                 $._SYMBOL_SINGLE_QUOTE,
@@ -224,6 +238,24 @@ module.exports = grammar({
         integer: $ => repeat1($._DIGIT),
         decimal: $ => seq(
             repeat1($._DIGIT), $._DECIMAL_SEPARATOR, repeat($._DIGIT)),
+
+        mention: $ => seq(
+            '@', field('target', choice($._string, $._sugared_string))),
+        tag: $ => seq(
+            '#', field('target', choice($._string, $._sugared_string))),
+        variable: $ => seq(
+            '$', field('target', choice($._string, $._sugared_string))),
+        ref: $ => seq(
+            '&', field('target', choice($._string, $._sugared_string))),
+        // Note: these are only valid in brackets, NOT as a normal metadata
+        // value!
+        uri: $ => field('target', choice($._string, $._sugared_uri)),
+
+        // These are used for @mentions, #tags, etc
+        _sugared_string: $ => /[^\s'"\[\]\{\}\(\)@#$&;]+/,
+        // RFC 2396, Appendix A describes valid characters for the schema,
+        // which we use to force non-collision with @mentions, #tags, etc
+        _sugared_uri: $ => /[A-z]([A-z0-9\+\-\.])*:[A-Za-z0-9-._~:/?#@!$&*+,%=]+/,
 
         // TODO: these aren't working right for multiline strings; it's
         // consuming the newline and I'm not sure how. Unfortunately I think
@@ -284,6 +316,15 @@ module.exports = grammar({
         $._ext_ul_marker,
         $._ext_annotation_marker,
         $._ext_eof,
+
+        $._ext_fmt_escape_pipe,
+        $._ext_fmt_escape_backslash,
+        $._ext_fmt_code,
+        $._ext_fmt_underline,
+        $._ext_fmt_strong,
+        $._ext_fmt_emphasis,
+        $._ext_fmt_strike,
+
         $.autoclose_warning
     ],
 });
