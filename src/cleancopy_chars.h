@@ -56,6 +56,13 @@ const int32_t UNICHR_TILDE = '~';
 const int32_t UNICHR_DOT = '.';
 const int32_t UNICHR_PLUS = '+';
 
+const int32_t UNICHR_SQ_BRACKET_OPEN = '[';
+const int32_t UNICHR_SQ_BRACKET_CLOSE = ']';
+const int32_t UNICHR_ANGLE_BRACKET_OPEN = '<';
+const int32_t UNICHR_ANGLE_BRACKET_CLOSE = '>';
+const int32_t UNICHR_PARENS_OPEN = '(';
+const int32_t UNICHR_PARENS_CLOSE = ')';
+
 
 static UnicodeCharacterRange UNIRAN_LETTER[] = {
   {'A', 'Z'}, {'a', 'z'}, {0xaa, 0xaa}, {0xb5, 0xb5}, {0xba, 0xba}, {0xc0, 0xd6}, {0xd8, 0xf6}, {0xf8, 0x2c1},

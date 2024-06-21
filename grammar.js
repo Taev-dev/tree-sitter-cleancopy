@@ -15,7 +15,6 @@ module.exports = grammar({
     conflicts: ($) => [
         [$.node_title],
         [$.node_metadata],
-        [$.annotation_line],
         [$.unordered_list_item],
         [$.ordered_list_item]],
 
@@ -29,7 +28,7 @@ module.exports = grammar({
         // other nih whitespace being next to the EoL. One example is if you
         // have a node title line with whitespace but no title. In this case,
         // we want the EoL to swallow the whitespace.
-        _eol: $ => seq(repeat(prec(2, $._ext_nih_whitespace)), $._ext_eol),
+        _eol: $ => seq(repeat(prec(2, $._ext_trailing_whitespace)), $._ext_eol),
         // Note: _ext_eol is intentional here; we don't want to twice consume
         // optional trailing whitespace
         empty_line: $ => seq($._ext_empty_line, $._ext_eol),
@@ -138,11 +137,24 @@ module.exports = grammar({
             $.metadata_value,
             $._eol),
 
+        inline_metadata_declaration: $ => seq(
+            $.node_metadata_key,
+            $._SYMBOL_METADATA_ASSIGNMENT,
+            repeat($._ext_nih_whitespace),
+            $.metadata_value),
+
+        inline_metadata: $ => seq(
+            $.inline_metadata_declaration,
+            repeat(seq(
+                $._SYMBOL_METADATA_SEPARATOR,
+                repeat($._ext_nih_whitespace),
+                $.inline_metadata_declaration))),
+
         _richtext_line_incl_ws: $ => seq(
             $._ext_node_continue, $.richtext_line, $._eol),
 
         _embedding_line_incl_ws: $ => seq(
-            $._ext_node_continue, $.embedding_line, $._eol),
+            $._ext_node_continue, alias($.plaintext, $.embedding_line), $._eol),
         _annotation_line_incl_ws: $ => seq(
             $._ext_node_continue, $.annotation_line, $._eol),
 
@@ -150,16 +162,26 @@ module.exports = grammar({
         // it **does not** include lists!
         // TODO: this should be a non-terminal, and support all of the
         // formatting etc
-        richtext_line: $ => /[^\n]+/,
-        
+        richtext_line: $ => repeat1(choice(
+            // Note: We can't use the existing $.plaintext rule because we'd
+            // then need a prec.right in $.plaintext, but the prec.right would
+            // then screw up all of the other rules that use plaintext. So
+            // instead we alias it like this. Suuuuper annoying. And then, to
+            // add insult to injury, we **also** need to force external scanning
+            // for it, because otherwise treesitter gets hyper-focused on the
+            // plaintext char and never triggers discovery of any of the
+            // formatting. FFS.
+            alias(prec.right(repeat1($._ext_richtext_char)), $.plaintext),
+            $._ext_fmt_unescape,
+            $._fmt_bracket)),
 
+        plaintext: $ => repeat1($._plaintext_char),
         // Plaintext chars ... explicitly forbid newline, though I guess
         // because of the way we're always throwing things to the external
         // scanner, this probably isn't necessary? At any rate, we can't really
         // have duplicate terminals in tree-sitter, so this gets used anywhere
         // we need plaintext
         _plaintext_char: $ => /[^\n]/,
-        embedding_line: $ => repeat1($._plaintext_char),
         annotation_line: $ => seq(
             $._ext_annotation_marker,
             repeat($._ext_nih_whitespace),
@@ -187,26 +209,26 @@ module.exports = grammar({
             $.ref
             // TODO: mappings and sequences!
             ),
-        uni_letter: $ => /\p{L}/u,
-        uni_modifier: $ => /\p{M}/u,
-        uni_number: $ => /\p{N}/u,
-        uni_underscore: $ => '_',
-        uni_hyphen: $ => '-',
-        uni_dot: $ => '.',
-        uni_fslash: $ => '/',
-        uni_bslash: $ => '\\',
-        uni_pipe: $ => '|',
-        uni_bracket_sq1: $ => '[',
-        uni_bracket_sq2: $ => ']',
-        uni_bracket_cur1: $ => '{',
-        uni_bracket_cur2: $ => '}',
-        uni_hash: $ => '#',
-        uni_dollar: $ => '$',
-        uni_at: $ => '@',
-        uni_ampersand: $ => '&',
-        uni_caret: $ => '^',
-        uni_backtick: $ => '`',
-        uni_asterisk: $ => '*',
+        // uni_letter: $ => /\p{L}/u,
+        // uni_modifier: $ => /\p{M}/u,
+        // uni_number: $ => /\p{N}/u,
+        // uni_underscore: $ => '_',
+        // uni_hyphen: $ => '-',
+        // uni_dot: $ => '.',
+        // uni_fslash: $ => '/',
+        // uni_bslash: $ => '\\',
+        // uni_pipe: $ => '|',
+        // uni_bracket_sq1: $ => '[',
+        // uni_bracket_sq2: $ => ']',
+        // uni_bracket_cur1: $ => '{',
+        // uni_bracket_cur2: $ => '}',
+        // uni_hash: $ => '#',
+        // uni_dollar: $ => '$',
+        // uni_at: $ => '@',
+        // uni_ampersand: $ => '&',
+        // uni_caret: $ => '^',
+        // uni_backtick: $ => '`',
+        // uni_asterisk: $ => '*',
 
         _string: $ => choice(
             seq(
@@ -279,12 +301,36 @@ module.exports = grammar({
         _LITERAL_VERSION_COMMENT: $ => '<<<cleancopy>>>',
 
         _SYMBOL_METADATA_ASSIGNMENT: $ => ':',
+        _SYMBOL_METADATA_SEPARATOR: $ => ';',
         _SYMBOL_SINGLE_QUOTE: $ => "'",
-        _SYMBOL_DOUBLE_QUOTE: $ => '"'
+        _SYMBOL_DOUBLE_QUOTE: $ => '"',
+
+        _fmt_bracket: $ => seq(
+            $._ext_fmt_bracket_open,
+            choice(
+                prec.dynamic(3, $.fmt_bracket_anon_link),
+                prec.dynamic(2, $.fmt_bracket_named_link),
+                prec.dynamic(1, $.fmt_bracket_metadata))),
+
+        fmt_bracket_anon_link: $ => seq(
+            $.richtext_line,
+            // choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            $._ext_fmt_bracket_close_anon_link),
+        fmt_bracket_named_link: $ => seq(
+            $.richtext_line,
+            $._ext_fmt_bracket_delimit_named_link,
+            $.richtext_line,
+            // choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            $._ext_fmt_bracket_close_named_link),
+        fmt_bracket_metadata: $ => seq(
+            $.richtext_line,
+            $._ext_fmt_bracket_delimit_metadata,
+            $.inline_metadata,
+            $._ext_fmt_bracket_close_metadata)
     },
 
     externals: $ => [
-        $._error_sentinel,
+        $._treesitter_error_sentinel,
         $._ext_metadata_key,
         // Note that we need this to be external so that we can manage the
         // internal state for the scanner -- we may have previously marked
@@ -304,6 +350,7 @@ module.exports = grammar({
         $._ext_eol,
         $._ext_empty_line,
         $._ext_nih_whitespace,
+        $._ext_trailing_whitespace,
         $._ext_node_continue,
         $._ext_node_begin,
         $._ext_node_end,
@@ -316,15 +363,21 @@ module.exports = grammar({
         $._ext_ul_marker,
         $._ext_annotation_marker,
         $._ext_eof,
-
         $._ext_fmt_escape_pipe,
         $._ext_fmt_escape_backslash,
+        $._ext_fmt_unescape,
         $._ext_fmt_code,
         $._ext_fmt_underline,
         $._ext_fmt_strong,
         $._ext_fmt_emphasis,
         $._ext_fmt_strike,
-
-        $.autoclose_warning
+        $._ext_fmt_bracket_open,
+        $._ext_fmt_bracket_delimit_named_link,
+        $._ext_fmt_bracket_delimit_metadata,
+        $._ext_fmt_bracket_close_anon_link,
+        $._ext_fmt_bracket_close_named_link,
+        $._ext_fmt_bracket_close_metadata,
+        $._ext_richtext_char,
+        $._scanner_error_sentinel
     ],
 });

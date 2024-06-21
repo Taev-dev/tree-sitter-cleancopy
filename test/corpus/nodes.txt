@@ -10,8 +10,10 @@ Single toplevel node, immediate, title-1, no metadata
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line))
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)))
     (empty_line))
 
 ==================
@@ -27,10 +29,13 @@ Single toplevel node, immediate, title-2, no metadata
     (node
         (node_title
             (node_title_line
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (node_title_line
-                (richtext_line)))
-        (richtext_line))
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)))
     (empty_line))
 
 ==================
@@ -44,13 +49,16 @@ Preamble content
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line)
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line))
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)))
     (empty_line))
 
 ==================
@@ -63,13 +71,17 @@ Trailing content
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line))
-    (richtext_line))
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)))
+    (richtext_line
+        (plaintext)))
 
 ==================
 Single toplevel node, delayed, no title, no metadata
@@ -82,12 +94,14 @@ Preamble content
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line)
     (node
         (node_title
             (node_title_line))
-        (richtext_line))
+        (richtext_line
+            (plaintext)))
     (empty_line))
 
 ==================
@@ -101,12 +115,14 @@ Preamble content
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line)
     (node
         (node_title
             (node_title_line
-                (richtext_line))))
+                (richtext_line
+                    (plaintext)))))
     (empty_line))
 
 ==================
@@ -120,7 +136,8 @@ Preamble content
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line)
     (node
         (node_title
@@ -151,26 +168,35 @@ Root trailing content
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line)
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext))
         (empty_line)
         (node
             (node_title
                 (node_title_line
-                    (richtext_line)))
-            (richtext_line)
+                    (richtext_line
+                        (plaintext))))
+            (richtext_line
+                (plaintext))
             (empty_line)
             (node
                 (node_title
                     (node_title_line
-                        (richtext_line)))
-                (richtext_line))
+                        (richtext_line
+                            (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (empty_line)
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (empty_line)
-        (richtext_line))
+        (richtext_line
+            (plaintext)))
     (empty_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line))
 
 ==================
@@ -191,19 +217,25 @@ Nested nodes, immediate, title-1, no metadata, immediate exit
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line)
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext))
         (empty_line)
         (node
             (node_title
                 (node_title_line
-                    (richtext_line)))
-            (richtext_line)
+                    (richtext_line
+                        (plaintext))))
+            (richtext_line
+                (plaintext))
             (empty_line)
             (node
                 (node_title
                     (node_title_line
-                        (richtext_line)))
-                (richtext_line))))
+                        (richtext_line
+                            (plaintext))))
+                (richtext_line
+                    (plaintext)))))
     (empty_line))
 

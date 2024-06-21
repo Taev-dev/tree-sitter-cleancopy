@@ -28,6 +28,7 @@ typedef enum {
     TOKEN_EOL,
     TOKEN_EMPTY_LINE,
     TOKEN_NIH_WHITESPACE,
+    TOKEN_TRAILING_WHITESPACE,
     TOKEN_NODE_CONTINUE,
     TOKEN_NODE_BEGIN,
     TOKEN_NODE_END,
@@ -40,17 +41,22 @@ typedef enum {
     TOKEN_MARKER_UNOL,
     TOKEN_MARKER_ANNOTATION,
     TOKEN_EOF,
-
     TOKEN_FMT_ESCAPE_PIPE,
     TOKEN_FMT_ESCAPE_BACKSLASH,
+    TOKEN_FMT_UNESCAPE,
     TOKEN_FMT_CODE,
     TOKEN_FMT_UNDERLINE,
     TOKEN_FMT_STRONG,
     TOKEN_FMT_EMPHASIS,
     TOKEN_FMT_STRIKE,
-    
-
-    TOKEN_AUTOCLOSE_WARNING,
+    TOKEN_FMT_BRACKET_OPEN,
+    TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK,
+    TOKEN_FMT_BRACKET_DELIMIT_METADATA,
+    TOKEN_FMT_BRACKET_CLOSE_ANON_LINK,
+    TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK,
+    TOKEN_FMT_BRACKET_CLOSE_METADATA,
+    TOKEN_RICHTEXT_CHAR,
+    _TOKEN_SCANNER_ERROR_SENTINEL,
 } TokenType;
 const char* _TokenNames[] = {
     "_ERROR_SENTINEL",
@@ -61,6 +67,7 @@ const char* _TokenNames[] = {
     "EOL",
     "EMPTY_LINE",
     "NIH_WHITESPACE",
+    "TRAILING_WHITESPACE",
     "NODE_CONTINUE",
     "NODE_BEGIN",
     "NODE_END",
@@ -75,11 +82,19 @@ const char* _TokenNames[] = {
     "EoF",
     "FMT_ESCAPE_PIPE",
     "FMT_ESCAPE_BACKSLASH",
+    "FMT_UNESCAPE",
     "FMT_CODE",
     "FMT_UNDERLINE",
     "FMT_STRONG",
     "FMT_EMPHASIS",
     "FMT_STRIKE",
+    "FMT_BRACKET_OPEN",
+    "FMT_BRACKET_DELIMIT_NAMED_LINK",
+    "FMT_BRACKET_DELIMIT_METADATA",
+    "FMT_BRACKET_CLOSE_ANON_LINK",
+    "FMT_BRACKET_CLOSE_NAMED_LINK",
+    "FMT_BRACKET_CLOSE_METADATA",
+    "RICHTEXT_CHAR",
     "AUTOCLOSE_WARNING"};
 
 
@@ -89,6 +104,214 @@ const TokenType SOL_SYMBOLS[] = {
     TOKEN_NODE_BEGIN,
     TOKEN_NODE_END
 };
+
+
+const TokenType FMT_SYMBOLS[] = {
+    TOKEN_FMT_ESCAPE_PIPE,
+    TOKEN_FMT_ESCAPE_BACKSLASH,
+    TOKEN_FMT_CODE,
+    TOKEN_FMT_UNDERLINE,
+    TOKEN_FMT_STRONG,
+    TOKEN_FMT_EMPHASIS,
+    TOKEN_FMT_STRIKE,
+    TOKEN_FMT_BRACKET_OPEN,
+    TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK,
+    TOKEN_FMT_BRACKET_DELIMIT_METADATA,
+    TOKEN_FMT_BRACKET_CLOSE_ANON_LINK,
+    TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK,
+    TOKEN_FMT_BRACKET_CLOSE_METADATA
+};
+
+
+//////////////////////////////////////////////////////////////////////////////
+// TYPEDEFS
+//////////////////////////////////////////////////////////////////////////////
+
+
+typedef enum {
+    LSTAT_NO_LIST,
+    LSTAT_OL,
+    LSTAT_UNOL
+} ListStatus;
+
+
+// IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
+typedef struct {
+    // Note: because we use contexts for both nodes and lists, this isn't always
+    // the same as the index in the context stack!
+    uint8_t node_level;
+    // The marker level is the list "depth" -- in other words, how many
+    // indents we're past the node level **at the marker**
+    uint8_t list_marker_level;
+    bool is_embed;
+    ListStatus list_status;
+} Context;
+// SUPER IMPORTANT: if you add anything here with a variable length, you'll
+// need to make significant changes to de/serialization! We currently rely
+// upon knowing the node size in advance before even starting to serialize the
+// node stack, so that we can preface it with a total size (though I'm not
+// actually sure the total size is needed, so maybe you can skip that? or,
+// I suppose you could store the node COUNT first, and then the size of each
+// node immediately before serializing it)
+
+
+typedef enum {
+    FMT_INLINE_METADATA,
+
+    FMT_ESCAPE_PIPE,
+    FMT_ESCAPE_BACKSLASH,
+    FMT_CODE,
+    FMT_UNDERLINE,
+    FMT_STRONG,
+    FMT_EMPHASIS,
+    FMT_STRIKE
+} FmtMarker;
+
+
+typedef enum {
+    FMT_BRACKET_OPEN,
+    FMT_BRACKET_DELIMIT_NAMED_LINK,
+    FMT_BRACKET_DELIMIT_METADATA,
+    FMT_BRACKET_CLOSE_ANON_LINK,
+    FMT_BRACKET_CLOSE_NAMED_LINK,
+    FMT_BRACKET_CLOSE_METADATA
+} FmtBracket;
+
+
+typedef struct {
+    uint8_t fmt_marker_bitmask;
+    FmtMarker this_marker;
+    uint8_t bracket_state_bitmask;
+} FmtState;
+
+
+typedef struct {
+    TokenType token;
+    size_t advance_count;
+    bool skip_mark;
+} PendingToken;
+
+
+// IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
+typedef struct {
+    // Together, these determine how indentation is determined for a file. It
+    // must always be the same indentation character used, and it must always
+    // be repeated the same number of times.
+    int32_t indentation_char;
+    uint8_t indentation_char_repetitions;
+
+    // The token backlog is FIFO, but the array we're using is a stack.
+    // Therefore, when we have a token backlog, instead of creating a new copy
+    // of it every time we need to pop from the LEFT of the array, we simply
+    // advance this counter. Once we've processed the whole backlog, we can
+    // set this to zero and clear the backlog.
+    uint8_t token_backlog_index;
+
+    // We use this to emit the embedded node flag out-of-order with the
+    // rest of the node metadata, which solves a bunch of problems with how
+    // treesitter expects the grammar to be
+    bool pending_embed_node;
+    // We use this to note what kind of list is pending
+    ListStatus pending_list_status;
+    // We use this to take the rest of a line out-of-band (for annotations,
+    // so we don't emit a bunch of erroneous NIH whitespace)
+    bool out_of_band_until_eol;
+
+    // We use this to denote that we've already processed the EoF and added
+    // any trailing zero-length tokens to the backlog. If this is true, and
+    // the token backlog is consumed, then parsing is finished.
+    bool post_eof;
+
+    Array(Context *) * context_stack;
+    Array(FmtState *) * fmt_stack;
+    Array(PendingToken *) * token_backlog;
+} Scanner;
+
+
+size_t _SCANNER_FIELD_LENGTHS[] = {
+    sizeof(int32_t),
+    sizeof(uint8_t),
+    sizeof(uint8_t),
+    sizeof(bool),
+    sizeof(ListStatus),
+    sizeof(bool),
+    sizeof(bool)};
+
+
+//////////////////////////////////////////////////////////////////////////////
+// MEMORY MANAGEMENT
+//////////////////////////////////////////////////////////////////////////////
+void *tree_sitter_cleancopy_external_scanner_create(
+        void
+) {
+    debug("##### PARSE START #####\n\n");
+    Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
+
+    assert(!CHAR_WITHIN(UNIRAN_DIGIT, ' '));
+    assert(!CHAR_WITHIN(UNIRAN_LETTER, ' '));
+    assert(!CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, ' '));
+    assert(CHAR_WITHIN(UNIRAN_DIGIT, '1'));
+    assert(CHAR_WITHIN(UNIRAN_LETTER, 'a'));
+    assert(CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, 0x300));
+
+    // This is how you create an empty array
+    // hmm, this emits a compiler warning because the Array(Context *) is used as
+    // a throwaway type to calculate a size.
+    scanner->context_stack = ts_malloc(sizeof(Array(Context *)));
+    scanner->fmt_stack = ts_malloc(sizeof(Array(FmtState *)));
+    scanner->token_backlog = ts_malloc(sizeof(Array(PendingToken *)));
+    scanner->indentation_char = 0;
+    scanner->indentation_char_repetitions = 0;
+    scanner->token_backlog_index = 0;
+    scanner->pending_embed_node = false;
+    scanner->pending_list_status = LSTAT_NO_LIST;
+    scanner->post_eof = false;
+    scanner->out_of_band_until_eol = false;
+    array_init(scanner->context_stack);
+    array_init(scanner->fmt_stack);
+    array_init(scanner->token_backlog);
+
+    return scanner;
+}
+
+
+void tree_sitter_cleancopy_external_scanner_destroy(
+        void *payload
+) {
+    Scanner *scanner = (Scanner *)payload;
+
+    // We need to free the contexts themselves before clearing the array, because
+    // it doesn't handle this.
+    for (size_t i = 0; i < scanner->context_stack->size; ++i) {
+        printf("!!! WARNING: context_stack had contexts on destruction!\n");
+        ts_free(*array_get(scanner->context_stack, i));
+    }
+    array_delete(scanner->context_stack);
+
+    // Same goes for the formatting state stack.
+    for (size_t i = 0; i < scanner->fmt_stack->size; ++i) {
+        printf("!!! WARNING: fmt_stack had states on destruction!\n");
+        ts_free(*array_get(scanner->fmt_stack, i));
+    }
+    array_delete(scanner->fmt_stack);
+
+    // And also for the token backlog.
+    for (size_t i = 0; i < scanner->token_backlog->size; ++i) {
+        // Note that, because the token backlog only gets cleared if we call
+        // emit_from_backlog ^^with an empty backlog^^, we can expect that the
+        // backlog will have token(s) on destruction. However, they should
+        // already have been emitted -- otherwise we should definitely warn!
+        if (i > scanner->token_backlog_index) {
+            printf("!!! WARNING: token backlog not empty on destruction!\n");
+        }
+
+        ts_free(*array_get(scanner->token_backlog, i));
+    }
+    array_delete(scanner->token_backlog);
+
+    ts_free(scanner);
+    debug("\n\n##### PARSE END #####\n");
+}
 
 
 //////////////////////////////////////////////////////////////////////////////
@@ -148,226 +371,22 @@ static bool is_indentation_or_eol(
 }
 
 
-static uint8_t detect_and_advance_through_letter(
-        /* This detects a letter (including any following modifier
-        codepoints) and returns the number of characters consumed as
-        part of it, or 0 if no letter was found.
-        */
-        TSLexer *lexer
-) {
-    uint8_t charcount = 0;
-    
-    // Note: the way this works in unicode is that you have one letter
-    // character followed by zero or more modifiers, so that's exactly what
-    // we have here
-    if (CHAR_WITHIN(UNIRAN_LETTER, lexer->lookahead)){
-        charcount += 1;
-        lexer->advance(lexer, false);
-
-        while (
-            !lexer->eof(lexer)
-            && CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, lexer->lookahead)
-        ) {
-            charcount += 1;
-            lexer->advance(lexer, false);
-        }
-    }
-
-    return charcount;
-}
-
-
-static uint8_t detect_and_advance_through_digit(
-        /* This detects a unicode digit and returns the number of
-        characters consumed as part of it, or 0 if no digit was found.
-        */
-        TSLexer *lexer
-) {
-    if (CHAR_WITHIN(UNIRAN_DIGIT, lexer->lookahead)){
-        lexer->advance(lexer, false);
-        return 1;
-    }
-
-    return 0;
-}
-
-
-static uint8_t detect_and_advance_through_codepoint(
-        /* This detects a specific single character, returning 1 if
-        found or 0 if not. If found, it also advances the lexer.
-        */
-        TSLexer *lexer,
-        int32_t codepoint_to_detect
-) {
-    if (lexer->lookahead == codepoint_to_detect){
-        lexer->advance(lexer, false);
-        return 1;
-    }
-
-    return 0;
-}
-
-
-//////////////////////////////////////////////////////////////////////////////
-// TYPEDEFS
-//////////////////////////////////////////////////////////////////////////////
-
-
-typedef enum {
-    LSTAT_NO_LIST,
-    LSTAT_OL,
-    LSTAT_UNOL
-} ListStatus;
-
-
-// IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
-typedef struct {
-    // Note: because we use contexts for both nodes and lists, this isn't always
-    // the same as the index in the context stack!
-    uint8_t node_level;
-    // The marker level is the list "depth" -- in other words, how many
-    // indents we're past the node level **at the marker**
-    uint8_t list_marker_level;
-    bool is_embed;
-    ListStatus list_status;
-} Context;
-// SUPER IMPORTANT: if you add anything here with a variable length, you'll
-// need to make significant changes to de/serialization! We currently rely
-// upon knowing the node size in advance before even starting to serialize the
-// node stack, so that we can preface it with a total size (though I'm not
-// actually sure the total size is needed, so maybe you can skip that? or,
-// I suppose you could store the node COUNT first, and then the size of each
-// node immediately before serializing it)
-
-
-typedef struct {
-    TokenType token;
-    size_t advance_count;
-    bool skip_mark;
-} PendingToken;
-
-
-// IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
-typedef struct {
-    // Together, these determine how indentation is determined for a file. It
-    // must always be the same indentation character used, and it must always
-    // be repeated the same number of times.
-    int32_t indentation_char;
-    uint8_t indentation_char_repetitions;
-
-    // The token backlog is FIFO, but the array we're using is a stack.
-    // Therefore, when we have a token backlog, instead of creating a new copy
-    // of it every time we need to pop from the LEFT of the array, we simply
-    // advance this counter. Once we've processed the whole backlog, we can
-    // set this to zero and clear the backlog.
-    uint8_t token_backlog_index;
-
-    // We use this to emit the embedded node flag out-of-order with the
-    // rest of the node metadata, which solves a bunch of problems with how
-    // treesitter expects the grammar to be
-    bool pending_embed_node;
-    // We use this to note what kind of list is pending
-    ListStatus pending_list_status;
-    // We use this to take the rest of a line out-of-band (for annotations,
-    // so we don't emit a bunch of erroneous NIH whitespace)
-    bool out_of_band_until_eol;
-
-    // We use this to denote that we've already processed the EoF and added
-    // any trailing zero-length tokens to the backlog. If this is true, and
-    // the token backlog is consumed, then parsing is finished.
-    bool post_eof;
-
-    Array(Context *) * context_stack;
-    Array(PendingToken *) * token_backlog;
-} Scanner;
-
-
-size_t _SCANNER_FIELD_LENGTHS[] = {
-    sizeof(int32_t),
-    sizeof(uint8_t),
-    sizeof(uint8_t),
-    sizeof(bool),
-    sizeof(ListStatus),
-    sizeof(bool),
-    sizeof(bool)};
-
-
-//////////////////////////////////////////////////////////////////////////////
-// MEMORY MANAGEMENT
-//////////////////////////////////////////////////////////////////////////////
-void *tree_sitter_cleancopy_external_scanner_create(
-        void
-) {
-    debug("##### PARSE START #####\n\n");
-    Scanner *scanner = (Scanner *)ts_malloc(sizeof(Scanner));
-
-    assert(!CHAR_WITHIN(UNIRAN_DIGIT, ' '));
-    assert(!CHAR_WITHIN(UNIRAN_LETTER, ' '));
-    assert(!CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, ' '));
-    assert(CHAR_WITHIN(UNIRAN_DIGIT, '1'));
-    assert(CHAR_WITHIN(UNIRAN_LETTER, 'a'));
-    assert(CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, 0x300));
-
-    // This is how you create an empty array
-    // hmm, this emits a compiler warning because the Array(Context *) is used as
-    // a throwaway type to calculate a size.
-    scanner->context_stack = ts_malloc(sizeof(Array(Context *)));
-    scanner->token_backlog = ts_malloc(sizeof(Array(PendingToken *)));
-    scanner->indentation_char = 0;
-    scanner->indentation_char_repetitions = 0;
-    scanner->token_backlog_index = 0;
-    scanner->pending_embed_node = false;
-    scanner->pending_list_status = LSTAT_NO_LIST;
-    scanner->post_eof = false;
-    scanner->out_of_band_until_eol = false;
-    array_init(scanner->context_stack);
-    array_init(scanner->token_backlog);
-
-    return scanner;
-}
-
-
-void tree_sitter_cleancopy_external_scanner_destroy(
-        void *payload
-) {
-    Scanner *scanner = (Scanner *)payload;
-
-    // We need to free the contexts themselves before clearing the array, because
-    // it doesn't handle this.
-    for (size_t i = 0; i < scanner->context_stack->size; ++i) {
-        printf("!!! WARNING: context_stack had contexts on destruction!\n");
-        ts_free(*array_get(scanner->context_stack, i));
-    }
-    array_delete(scanner->context_stack);
-    // Same goes for the token backlog.
-    for (size_t i = 0; i < scanner->token_backlog->size; ++i) {
-        // Note that, because the token backlog only gets cleared if we call
-        // emit_from_backlog ^^with an empty backlog^^, we can expect that the
-        // backlog will have token(s) on destruction. However, they should
-        // already have been emitted -- otherwise we should definitely warn!
-        if (i > scanner->token_backlog_index) {
-            printf("!!! WARNING: token backlog not empty on destruction!\n");
-        }
-
-        ts_free(*array_get(scanner->token_backlog, i));
-    }
-    array_delete(scanner->token_backlog);
-
-    ts_free(scanner);
-    debug("\n\n##### PARSE END #####\n");
-}
-
-
 //////////////////////////////////////////////////////////////////////////////
 // HELPERS
 //////////////////////////////////////////////////////////////////////////////
 
 
 typedef struct {
+    size_t advance_count;
+
     // Positive matches: found a specific token
     bool positive_match_found;
     // Negative matches: we know no token can be found
     bool negative_match_found;
+    // Tested, but no match found; useful for ambiguities (nih vs trailing ws)
+    bool post_disambiguation;
+    TokenType disambiguated_token;
+
     // Together, these describe which mutations we've done to the lexer.
     // Mostly (only?) useful for sanity-check assertions
     uint16_t lexer_col_at_start;
@@ -376,6 +395,19 @@ typedef struct {
 
     const bool *valid_symbols;
 } ScanState;
+
+
+static void advance_lexer(
+        /* This is a helper that both advances the lexer AND keeps track of
+        how much we've done so.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state,
+        bool ignore_in_token
+) {
+    lexer->advance(lexer, ignore_in_token);
+    scan_state->advance_count += 1;
+}
 
 
 static void reset_backlog(
@@ -693,6 +725,74 @@ static bool _ensure_indent_info(
 }
 
 
+static uint8_t detect_and_advance_through_letter(
+        /* This detects a letter (including any following modifier
+        codepoints) and returns the number of characters consumed as
+        part of it, or 0 if no letter was found.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state
+) {
+    uint8_t charcount = 0;
+    
+    // Note: the way this works in unicode is that you have one letter
+    // character followed by zero or more modifiers, so that's exactly what
+    // we have here
+    if (CHAR_WITHIN(UNIRAN_LETTER, lexer->lookahead)){
+        charcount += 1;
+        advance_lexer(lexer, scan_state, false);
+
+        while (
+            !lexer->eof(lexer)
+            && CHAR_WITHIN(UNIRAN_LETTER_MODIFIER, lexer->lookahead)
+        ) {
+            charcount += 1;
+            advance_lexer(lexer, scan_state, false);
+        }
+    }
+
+    return charcount;
+}
+
+
+static uint8_t detect_and_advance_through_digit(
+        /* This detects a unicode digit and returns the number of
+        characters consumed as part of it, or 0 if no digit was found.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state
+) {
+    if (CHAR_WITHIN(UNIRAN_DIGIT, lexer->lookahead)){
+        advance_lexer(lexer, scan_state, false);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+static uint8_t detect_and_advance_through_codepoint(
+        /* This detects a specific single character, returning 1 if
+        found or 0 if not. If found, it also advances the lexer.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state,
+        int32_t codepoint_to_detect
+) {
+    if (lexer->lookahead == codepoint_to_detect){
+        advance_lexer(lexer, scan_state, false);
+        return 1;
+    }
+
+    return 0;
+}
+
+
+//////////////////////////////////////////////////////////////////////////////
+// SCANNING
+//////////////////////////////////////////////////////////////////////////////
+
+
 typedef struct {
     uint16_t indentation_char_count;
     uint16_t nih_whitespace_char_count;
@@ -732,7 +832,8 @@ typedef struct {
 static SoLMarkerDetection *detect_and_advance_through_annotation_marker(
         /* This detects the marker for annotation lines (comments).
         */
-        TSLexer *lexer
+        TSLexer *lexer,
+        ScanState *scan_state
 ) {
     SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
     detection->marker = MARKER_ANNOTATION;
@@ -742,11 +843,11 @@ static SoLMarkerDetection *detect_and_advance_through_annotation_marker(
 
     if (lexer->lookahead == UNICHR_HASH) {
         detection->chars_advanced += 1;
-        lexer->advance(lexer, false);
+        advance_lexer(lexer, scan_state, false);
 
         if (lexer->lookahead == UNICHR_HASH) {
             detection->chars_advanced += 1;
-            lexer->advance(lexer, false);
+            advance_lexer(lexer, scan_state, false);
             detection->detected = true;
         }
     }
@@ -757,7 +858,8 @@ static SoLMarkerDetection *detect_and_advance_through_annotation_marker(
 static SoLMarkerDetection *detect_and_advance_through_ol_marker(
         /* This detects the marker for an ordered list.
         */
-        TSLexer *lexer
+        TSLexer *lexer,
+        ScanState *scan_state
 ) {
     SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
     detection->marker = MARKER_OL;
@@ -767,7 +869,7 @@ static SoLMarkerDetection *detect_and_advance_through_ol_marker(
 
     uint8_t digit_index = 0;
     while (CHAR_WITHIN(UNIRAN_DIGIT, lexer->lookahead)){
-        lexer->advance(lexer, false);
+        advance_lexer(lexer, scan_state, false);
         detection->chars_advanced += 1;
         detection->marker_payload_charcount += 1;
     }
@@ -775,11 +877,11 @@ static SoLMarkerDetection *detect_and_advance_through_ol_marker(
     if (detection->chars_advanced){
         if (lexer->lookahead == UNICHR_DOT) {
             detection->chars_advanced += 1;
-            lexer->advance(lexer, false);
+            advance_lexer(lexer, scan_state, false);
 
             if (lexer->lookahead == UNICHR_DOT) {
                 detection->chars_advanced += 1;
-                lexer->advance(lexer, false);
+                advance_lexer(lexer, scan_state, false);
                 detection->detected = true;
             }
         }
@@ -791,7 +893,8 @@ static SoLMarkerDetection *detect_and_advance_through_ol_marker(
 static SoLMarkerDetection *detect_and_advance_through_unol_marker(
         /* This detects the marker for an unordered list.
         */
-        TSLexer *lexer
+        TSLexer *lexer,
+        ScanState *scan_state
 ) {
     SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
     detection->marker = MARKER_UNOL;
@@ -801,11 +904,11 @@ static SoLMarkerDetection *detect_and_advance_through_unol_marker(
 
     if (lexer->lookahead == UNICHR_PLUS) {
         detection->chars_advanced += 1;
-        lexer->advance(lexer, false);
+        advance_lexer(lexer, scan_state, false);
 
         if (lexer->lookahead == UNICHR_PLUS) {
             detection->chars_advanced += 1;
-            lexer->advance(lexer, false);
+            advance_lexer(lexer, scan_state, false);
             detection->detected = true;
         }
     }
@@ -820,11 +923,12 @@ static SoLMarkerDetection *detect_and_advance_through_SoL_marker(
 
         Note that, if no marker is found, we'll return a null pointer.
         */
-        TSLexer *lexer
+        TSLexer *lexer,
+        ScanState *scan_state
 ) {
     SoLMarkerDetection *detection;
 
-    detection = detect_and_advance_through_unol_marker(lexer);
+    detection = detect_and_advance_through_unol_marker(lexer, scan_state);
     if (detection->detected) {
         return detection;
     } else if (detection->chars_advanced) {
@@ -837,7 +941,7 @@ static SoLMarkerDetection *detect_and_advance_through_SoL_marker(
         ts_free(detection);
     }
 
-    detection = detect_and_advance_through_ol_marker(lexer);
+    detection = detect_and_advance_through_ol_marker(lexer, scan_state);
     if (detection->detected) {
         return detection;
     } else if (detection->chars_advanced) {
@@ -850,7 +954,7 @@ static SoLMarkerDetection *detect_and_advance_through_SoL_marker(
         ts_free(detection);
     }
 
-    detection = detect_and_advance_through_annotation_marker(lexer);
+    detection = detect_and_advance_through_annotation_marker(lexer, scan_state);
     if (detection->detected) {
         return detection;
     } else if (detection->chars_advanced) {
@@ -873,17 +977,18 @@ static uint8_t detect_and_advance_through_eol(
         and returns the number of characters consumed as part of it, or
         0 if no EoL was found.
         */
-        TSLexer *lexer
+        TSLexer *lexer,
+        ScanState *scan_state
 ) {
     uint8_t charcount = 0;
 
     if (lexer->lookahead == UNICHR_CR) {
         charcount += 1;
-        lexer->advance(lexer, true);
+        advance_lexer(lexer, scan_state, true);
     }
     if (lexer->lookahead == UNICHR_NEWLINE) {
         charcount += 1;
-        lexer->advance(lexer, false);
+        advance_lexer(lexer, scan_state, false);
     }
     return charcount;
 }
@@ -901,6 +1006,7 @@ static SoLWhitespace *advance_through_empty_lines(
         */
         TSLexer *lexer,
         Scanner *scanner,
+        ScanState *scan_state,
         Array(SoLWhitespace *) * empty_lines
 ) {
     uint16_t indentation_char_count = 0;
@@ -916,19 +1022,19 @@ static SoLWhitespace *advance_through_empty_lines(
                 && lexer->lookahead == scanner->indentation_char
             ) {
                 indentation_char_count += 1;
-                lexer->advance(lexer, false);}
+                advance_lexer(lexer, scan_state, false);}
         }
         while (
             !lexer->eof(lexer)
             && is_horizontal_whitespace(lexer->lookahead)
         ) {
             nih_whitespace_char_count += 1;
-            lexer->advance(lexer, false);
+            advance_lexer(lexer, scan_state, false);
         }
 
         // Note: we don't want to add an extra empty line if we hit EoF. That
         // gets detected in the caller and simply added to empty_lines
-        uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer);
+        uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer, scan_state);
         if (maybe_eol_characters){
             SoLWhitespace *empty_line = ts_malloc(sizeof(SoLWhitespace));
             empty_line->indentation_char_count = indentation_char_count;
@@ -1079,11 +1185,6 @@ static SoLIndentationClassification *classify_sol_indentation(
         "... Nonempty line classified as %d\n", classification->sol_indent_action);
     return classification;
 }
-
-
-//////////////////////////////////////////////////////////////////////////////
-// SCANNING
-//////////////////////////////////////////////////////////////////////////////
 
 
 static void handle_eof_after_nonempty_line(
@@ -2226,7 +2327,7 @@ static void peek_and_schedule_start_of_line(
     // character isn't indentation, then we can skip indentation checking
     // and just do empty line checks
     SoLWhitespace *first_nonempty_line = advance_through_empty_lines(
-        lexer, scanner, empty_lines);
+        lexer, scanner, scan_state, empty_lines);
     SoLMarkerDetection *marker_detection = NULL;
     SoLIndentationClassification *classification;
 
@@ -2247,7 +2348,7 @@ static void peek_and_schedule_start_of_line(
     // Note that classify_sol_indentation is perfectly capable of handling a
     // null active_context!
     } else {
-        marker_detection = detect_and_advance_through_SoL_marker(lexer);
+        marker_detection = detect_and_advance_through_SoL_marker(lexer, scan_state);
         // These can't do anything more than detection, because we might need
         // to reorder some empty lines first
         // Note that these aren't completely trivial because we have embeddings
@@ -2301,7 +2402,7 @@ static void detect_and_schedule_eol(
         Scanner *scanner,
         ScanState *scan_state
 ) {
-    uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer);
+    uint8_t maybe_eol_characters = detect_and_advance_through_eol(lexer, scan_state);
     if (maybe_eol_characters) {
         // NOTE: we actually **need** to advance here, because we need to
         // check for the immediately following EoF immediately after
@@ -2393,8 +2494,8 @@ static void detect_and_schedule_node_metadata_key(
     // expression in C (augmented or otherwise) is the value itself.
     if (
         (charcount += detect_and_advance_through_codepoint(
-            lexer, UNICHR_UNDERSCORE))
-        || (charcount += detect_and_advance_through_letter(lexer))
+            lexer, scan_state, UNICHR_UNDERSCORE))
+        || (charcount += detect_and_advance_through_letter(lexer, scan_state))
     ) {
         // This is effectively a while true, so we need to be careful about
         // having a break condition within the loop
@@ -2421,11 +2522,11 @@ static void detect_and_schedule_node_metadata_key(
             // as the boolean condition, but also the value itself
             if (
                 (loop_charcount = detect_and_advance_through_codepoint(
-                    lexer, UNICHR_UNDERSCORE))
+                    lexer, scan_state, UNICHR_UNDERSCORE))
                 || (loop_charcount = detect_and_advance_through_codepoint(
-                    lexer, UNICHR_HYPHEN))
-                || (loop_charcount = detect_and_advance_through_letter(lexer))
-                || (loop_charcount = detect_and_advance_through_digit(lexer))
+                    lexer, scan_state, UNICHR_HYPHEN))
+                || (loop_charcount = detect_and_advance_through_letter(lexer, scan_state))
+                || (loop_charcount = detect_and_advance_through_digit(lexer, scan_state))
             ) {
                 charcount += loop_charcount;
                 
@@ -2453,6 +2554,301 @@ static void detect_and_schedule_node_metadata_key(
     if (charcount) {
         consume_advances_from_lexer(lexer, scan_state, false);
         schedule_token(scanner, scan_state, TOKEN_METADATA_KEY, charcount, true);
+    }
+}
+
+
+typedef struct {
+    bool detected;
+    TokenType token;
+} FmtBracketDetection;
+
+
+static void detect_and_advance_through_fmt_bracket_open(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtBracketDetection *detection
+) {
+    if (lexer->lookahead == UNICHR_SQ_BRACKET_OPEN) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_BRACKET_OPEN;
+
+        if (lexer->lookahead == UNICHR_SQ_BRACKET_OPEN) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_OPEN;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_bracket_close_and_something(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtBracketDetection *detection
+) {
+    if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        // Doesn't really matter, just needs to be NOT trailing whitespace
+        scan_state->disambiguated_token = TOKEN_FMT_BRACKET_CLOSE_ANON_LINK;
+
+        if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_CLOSE_ANON_LINK;
+
+        } else if (lexer->lookahead == UNICHR_ANGLE_BRACKET_OPEN) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_DELIMIT_METADATA;
+
+        } else if (lexer->lookahead == UNICHR_PARENS_OPEN) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK;
+        }
+    }
+}
+
+
+static void detect_and_advance_through_fmt_bracket_close_named_link(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtBracketDetection *detection
+) {
+    if (lexer->lookahead == UNICHR_PARENS_CLOSE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK;
+
+        if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_bracket_close_metadata(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtBracketDetection *detection
+) {
+    if (lexer->lookahead == UNICHR_ANGLE_BRACKET_CLOSE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_BRACKET_CLOSE_METADATA;
+
+        if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_BRACKET_CLOSE_METADATA;
+        }
+        
+    }
+}
+
+
+static void detect_and_schedule_formatting(
+        /* This is the entrypoint for all of our formatting handling.
+        Note that we've taken a number of shortcuts here due to the
+        limitations of tree-sitter, most notably:
+        ++  all inline metadata, links, etc must be within a single line
+        ++  the result of the actual parsing doesn't end up as a tree of
+            "strong(em(plaintext))", but rather as a kind of sequence of
+            opcodes, ex "toggle_strong, toggle_em, plaintext, toggle_strong,
+            toggle_em"
+
+        **Note that all characters associated with formatting MUST be
+        mutually exclusive;** otherwise, you'll get into a situation where
+        one is partially consumed by an earlier marker.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    // NOTE: First, we need to make sure we didn't just scan over some
+    // whitespace, before we accidentally try and combine it with an
+    // upcoming formatting marker
+    if (scan_state->post_disambiguation) {
+        return;
+    }
+
+    // TODO: first we need to check to see if we're in an escaped context,
+    // either through string escapes or within an inline code block
+    FmtBracketDetection *detection = ts_malloc(sizeof(FmtBracketDetection));
+    detection->detected = false;
+    detection->token = 0;
+
+    detect_and_advance_through_fmt_bracket_open(lexer, scan_state, detection);
+    if (detection->detected){
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(
+            scanner,
+            scan_state,
+            detection->token,
+            2,
+            true);
+        return;
+    }
+
+    detect_and_advance_through_fmt_bracket_close_and_something(lexer, scan_state, detection);
+    if (detection->detected){
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(
+            scanner,
+            scan_state,
+            detection->token,
+            2,
+            true);
+        return;
+    }
+
+    detect_and_advance_through_fmt_bracket_close_named_link(lexer, scan_state, detection);
+    if (detection->detected){
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(
+            scanner,
+            scan_state,
+            detection->token,
+            2,
+            true);
+        return;
+    }
+
+    detect_and_advance_through_fmt_bracket_close_metadata(lexer, scan_state, detection);
+    if (detection->detected){
+        consume_advances_from_lexer(lexer, scan_state, false);
+        schedule_token(
+            scanner,
+            scan_state,
+            detection->token,
+            2,
+            true);
+        return;
+    }
+}
+
+
+static void detect_and_schedule_trailing_whitespace(
+        /* We check trailing whitespace separately from nih whitespace to
+        reduce ambiguities in the grammar, which both improves the grammar
+        itself and avoids a bunch of pitfalls with accidental detection of
+        mid-line nih_whitespace detection inside of richtext/plaintext
+        content.
+
+        Additionally, we do can use this to always preserve trailing
+        whitespace within embeddings.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    assert(scan_state->advance_count == 0);
+
+    // Fffff yet again: this is a workaround for treesitter not having a
+    // concept of PEG-style precedence. It's asking us to look for whitespace
+    // characters (because they're valid as part of the EoL), but then it
+    // doesn't understand that the whitespace character could also be a valid
+    // embedding character. So when it asks us to find a whitespace character,
+    // and we do, it gets stuck, and errors out.
+    bool is_embed = false;
+    if (scanner->context_stack->size > 0) {
+        Context *active_context = (Context *)*array_back(
+            scanner->context_stack);
+        is_embed = active_context->is_embed;
+    }
+
+    if (
+        !is_embed
+        // NOTE: trailing whitespace is stripped from annotation lines, so
+        // out_of_band_until_eol doesn't apply here!
+        && lexer->get_column(lexer) != 0
+    ) {
+        if (is_horizontal_whitespace(lexer->lookahead)) {
+            scan_state->post_disambiguation = true;
+            scan_state->disambiguated_token = TOKEN_TRAILING_WHITESPACE;
+
+            while (is_horizontal_whitespace(lexer->lookahead)) {
+                advance_lexer(lexer, scan_state, false);
+            }
+
+            if (lexer->lookahead == UNICHR_NEWLINE) {
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    TOKEN_TRAILING_WHITESPACE,
+                    scan_state->advance_count,
+                    true);
+            }
+        }
+    }
+}
+
+
+static void detect_and_schedule_richtext_char(
+        /* If we let tree sitter handle the plaintext characters within
+        a richtext span on its own, it gets hyper-focused on them and
+        can't snap out of it, so it never asks the external scanner (ie
+        us) to look for any of the formatting. Therefore, we just, well,
+        do it ourselves, just like everything else.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    // Fffff yet again: this is a workaround for treesitter not having a
+    // concept of PEG-style precedence. It's asking us to look for whitespace
+    // characters (because they're valid as part of the EoL), but then it
+    // doesn't understand that the whitespace character could also be a valid
+    // embedding character. So when it asks us to find a whitespace character,
+    // and we do, it gets stuck, and errors out.
+    bool is_embed = false;
+    if (scanner->context_stack->size > 0) {
+        Context *active_context = (Context *)*array_back(
+            scanner->context_stack);
+        is_embed = active_context->is_embed;
+    }
+
+    // Note: NOT THE SAME AS NIH_WHITESPACE! We don't care whether or not we're
+    // at the start of the line here!
+    if (
+        !is_embed
+        && !scanner->out_of_band_until_eol
+    ) {
+        // NOTE: this might be immediately following a check for trailing
+        // whitespace. In that case, we should consume all of it -- but we've
+        // already advanced!
+        if (
+            scan_state->post_disambiguation
+            // Note: don't bother checking which token was disambiguated;
+            // there are a bunch of different possibilities (every single
+            // formatting flag, for example)
+        ) {
+            consume_advances_from_lexer(lexer, scan_state, false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_RICHTEXT_CHAR,
+                scan_state->advance_count,
+                true);
+
+        // Otherwise, we just have to trust that:
+        // ++   the parser would only tell us this is valid where it is, in
+        //      fact, valid
+        // ++   our precedence order within the external scanner is written
+        //      correctly, so that anything with a higher precedence is already
+        //      scanned and detected, and therefore
+        //      can_parse(TOKEN_RICHTEXT_CHAR) would return false if we'd found
+        //      something else
+        } else {
+            schedule_token(scanner, scan_state, TOKEN_RICHTEXT_CHAR, 1, false);
+        }
     }
 }
 
@@ -2486,9 +2882,28 @@ static void detect_and_schedule_nih_whitespace(
         !is_embed
         && !scanner->out_of_band_until_eol
         && lexer->get_column(lexer) != 0
-        && is_horizontal_whitespace(lexer->lookahead)
     ) {
-        schedule_token(scanner, scan_state, TOKEN_NIH_WHITESPACE, 1, false);
+        // NOTE: this might be immediately following a check for trailing
+        // whitespace. In that case, we should consume all of it -- but we've
+        // already advanced!
+        if (
+            scan_state->post_disambiguation
+            && scan_state->disambiguated_token == TOKEN_TRAILING_WHITESPACE
+        ) {
+            consume_advances_from_lexer(lexer, scan_state, false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NIH_WHITESPACE,
+                scan_state->advance_count,
+                true);
+
+        // Otherwise, the parse says NIH could be valid here, so we need to
+        // check forwards first.
+        } else if (is_horizontal_whitespace(lexer->lookahead)) {
+            schedule_token(scanner, scan_state, TOKEN_NIH_WHITESPACE, 1, false);
+            
+        }
     }
 }
 
@@ -2524,6 +2939,9 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     scan_state->lexer_marked = false;
     scan_state->valid_symbols = valid_symbols;
     scan_state->lexer_last_marked_col = scan_state->lexer_col_at_start;
+    scan_state->advance_count = 0;
+    scan_state->post_disambiguation = false;
+    scan_state->disambiguated_token = 0;
     lexer->mark_end(lexer);
 
     // Once we hit this, we've scheduled **and emitted** all of the meaningful
@@ -2550,7 +2968,7 @@ bool tree_sitter_cleancopy_external_scanner_scan(
             // debug("--- checkpoint1. valid symbols:\n");
             // for (
             //     size_t i = _TOKEN_ERROR_SENTINEL;
-            //     i <= TOKEN_AUTOCLOSE_WARNING;
+            //     i <= _TOKEN_SCANNER_ERROR_SENTINEL;
             //     i++
             // ) {
             //     debug("    %s: %d\n", _TokenNames[i], valid_symbols[i]);
@@ -2580,6 +2998,29 @@ bool tree_sitter_cleancopy_external_scanner_scan(
                 detect_and_schedule_eol(lexer, scanner, scan_state);}
             if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_DEF})){
                 detect_and_schedule_node_def(lexer, scanner, scan_state);}
+
+            // Always prefer trailing whitespace to NIH whitespace and plaintext
+            // chars, but also be careful because of mutual consumption problems
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_TRAILING_WHITESPACE})){
+                detect_and_schedule_trailing_whitespace(lexer, scanner, scan_state);}
+
+            // Note that we have to explicitly check for richtext chars here,
+            // even if treesitter doesn't think they're valid, because otherwise
+            // it doesn't ever bother to check to see if they might also be
+            // valid. Also: this needs to be immediately before the richtext
+            // chars; otherwise we can clobber the above stuff
+            if (
+                can_parse(scan_state, FMT_SYMBOLS)
+                || can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR})
+            ) {
+                detect_and_schedule_formatting(lexer, scanner, scan_state);}
+
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR})) {
+                detect_and_schedule_richtext_char(lexer, scanner, scan_state);}
+
+            // Note: this needs to be last, because at EoL we want to always
+            // swallow trailing whitespace, but it might be part inline stuff
+            // instead.
             if (can_parse(scan_state, (TokenType[1]){TOKEN_NIH_WHITESPACE})){
                 detect_and_schedule_nih_whitespace(lexer, scanner, scan_state);}
         }
@@ -2648,15 +3089,18 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
         _SCANNER_FIELD_LENGTHS[6]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[6];
 
+    // Context stack -----
     unsigned context_stack_count = scanner->context_stack->size;
     size_t context_size = sizeof(Context);
     size_t context_stack_size = context_size * context_stack_count;
+    // Sanity check containing length of array
     memcpy(
         &buffer[buffer_offset],
         &context_stack_size,
         sizeof(size_t));
     buffer_offset += sizeof(size_t);
 
+    // Array itself
     for (
         unsigned context_index = 0;
         context_index < context_stack_count;
@@ -2670,15 +3114,43 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
         buffer_offset += context_size;
     }
 
+    // Formatting state stack ------
+    unsigned fmt_stack_count = scanner->fmt_stack->size;
+    size_t fmt_state_size = sizeof(FmtState);
+    size_t fmt_stack_size = fmt_state_size * fmt_stack_count;
+    // Sanity check containing length of array
+    memcpy(
+        &buffer[buffer_offset],
+        &fmt_stack_size,
+        sizeof(size_t));
+    buffer_offset += sizeof(size_t);
+
+    // Array itself
+    for (
+        unsigned fmt_index = 0;
+        fmt_index < fmt_stack_count;
+        ++fmt_index
+    ) {
+        FmtState *fmt_state = *array_get(scanner->fmt_stack, fmt_index);
+        memcpy(
+            &buffer[buffer_offset],
+            fmt_state,
+            fmt_state_size);
+        buffer_offset += fmt_state_size;
+    }
+
+    // Token backlog -----
     unsigned token_backlog_count = scanner->token_backlog->size;
     size_t pending_token_size = sizeof(PendingToken);
     size_t backlog_size = pending_token_size * token_backlog_count;
+    // Sanity check containing length of array
     memcpy(
         &buffer[buffer_offset],
         &backlog_size,
         sizeof(size_t));
     buffer_offset += sizeof(size_t);
 
+    // Array itself
     for (
         unsigned backlog_index = 0;
         backlog_index < token_backlog_count;
@@ -2704,6 +3176,7 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
 ) {
     Scanner *scanner = (Scanner *)payload;
     array_init(scanner->context_stack);
+    array_init(scanner->fmt_stack);
     array_init(scanner->token_backlog);
 
     if (length == 0) { return; }
@@ -2752,6 +3225,7 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
         _SCANNER_FIELD_LENGTHS[6]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[6];
 
+    // Context stack ------
     size_t context_size = sizeof(Context);
     size_t context_stack_size;
     memcpy(
@@ -2770,7 +3244,28 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
         array_push(scanner->context_stack, copied_context);
         buffer_offset += context_size;
     }
+    
+    // Formatting stack
+    size_t fmt_state_size = sizeof(FmtState);
+    size_t fmt_stack_size;
+    memcpy(
+        &fmt_stack_size,
+        &buffer[buffer_offset],
+        sizeof(size_t));
+    buffer_offset += sizeof(size_t);
 
+    size_t fmt_stack_end = buffer_offset + fmt_stack_size;
+    while (buffer_offset < fmt_stack_end) {
+        FmtState *copied_fmt_state = ts_malloc(fmt_state_size);
+        memcpy(
+            copied_fmt_state,
+            &buffer[buffer_offset],
+            fmt_state_size);
+        array_push(scanner->fmt_stack, copied_fmt_state);
+        buffer_offset += fmt_state_size;
+    }
+
+    // Pending tokens ------
     size_t pending_token_size = sizeof(PendingToken);
     size_t backlog_size;
     memcpy(

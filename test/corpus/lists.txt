@@ -9,14 +9,18 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -31,14 +35,18 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -57,22 +65,27 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line)
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line)
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line)
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -88,18 +101,23 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (unordered_list
                 (unordered_list_item
-                    (richtext_line)
+                    (richtext_line
+                        (plaintext))
                     (unordered_list
                         (unordered_list_item
-                            (richtext_line)))))))
+                            (richtext_line
+                                (plaintext))))))))
     (empty_line))
 
 
@@ -115,18 +133,23 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (ordered_list
                 (ordered_list_item
-                    (richtext_line)
+                    (richtext_line
+                        (plaintext))
                     (ordered_list
                         (ordered_list_item
-                            (richtext_line)))))))
+                            (richtext_line
+                                (plaintext))))))))
     (empty_line))
 
 
@@ -144,22 +167,29 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (unordered_list
                 (unordered_list_item
-                    (richtext_line)
+                    (richtext_line
+                        (plaintext))
                     (unordered_list
                         (unordered_list_item
-                            (richtext_line))))
+                            (richtext_line
+                                (plaintext)))))
                 (unordered_list_item
-                    (richtext_line))))
+                    (richtext_line
+                        (plaintext)))))
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -177,22 +207,29 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (ordered_list
                 (ordered_list_item
-                    (richtext_line)
+                    (richtext_line
+                        (plaintext))
                     (ordered_list
                         (ordered_list_item
-                            (richtext_line))))
+                            (richtext_line
+                                (plaintext)))))
                 (ordered_list_item
-                    (richtext_line))))
+                    (richtext_line
+                        (plaintext)))))
         (ordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -208,18 +245,23 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (unordered_list
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (ordered_list
         (ordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -235,18 +277,23 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (ordered_list
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -263,16 +310,22 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)
-            (richtext_line))
+            (richtext_line
+                (plaintext))
+            (richtext_line
+                (plaintext)))
         (unordered_list_item
-            (richtext_line)
-            (richtext_line)))
+            (richtext_line
+                (plaintext))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -289,16 +342,22 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)
-            (richtext_line))
+            (richtext_line
+                (plaintext))
+            (richtext_line
+                (plaintext)))
         (ordered_list_item
-            (richtext_line)
-            (richtext_line)))
+            (richtext_line
+                (plaintext))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -314,18 +373,23 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (unordered_list
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line))))
+                (richtext_line
+                    (plaintext)))))
     (empty_line))
 
 
@@ -343,20 +407,27 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (unordered_list
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line)
-                (richtext_line))
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line)
-                (richtext_line))))
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext)))))
     (empty_line))
 
 
@@ -372,19 +443,24 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (unordered_list
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line)
+                (richtext_line
+                    (plaintext))
                 (unordered_list
                     (unordered_list_item
-                        (richtext_line))))))
+                        (richtext_line
+                            (plaintext)))))))
     (empty_line))
 
 
@@ -402,21 +478,28 @@ Here we have a single content row followed by:
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (unordered_list
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line)
-                (richtext_line)
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext))
                 (unordered_list
                     (unordered_list_item
-                        (richtext_line)
-                        (richtext_line))))))
+                        (richtext_line
+                            (plaintext))
+                        (richtext_line
+                            (plaintext)))))))
     (empty_line))
 
 
@@ -438,24 +521,34 @@ tada!
 ---
 
 (document
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (unordered_list
             (unordered_list_item
-                (richtext_line))
+                (richtext_line
+                    (plaintext)))
             (unordered_list_item
-                (richtext_line)
-                (richtext_line)
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext))
                 (unordered_list
                     (unordered_list_item
-                        (richtext_line)
-                        (richtext_line))))
+                        (richtext_line
+                            (plaintext))
+                        (richtext_line
+                            (plaintext)))))
             (unordered_list_item
-                (richtext_line)
-                (richtext_line))))
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext)))))
     (empty_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
     (empty_line))

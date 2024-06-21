@@ -7,8 +7,10 @@ nothing else.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (empty_line))
 
 ==================
@@ -20,8 +22,10 @@ nothing else. Like above, but the empty line at the end has whitespace in it.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (empty_line))
 
 
@@ -33,5 +37,21 @@ nothing else.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line))
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)))
+
+
+==================
+Root node anon link, plain
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline anonymous link: [[https://www.example.com]]
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)))

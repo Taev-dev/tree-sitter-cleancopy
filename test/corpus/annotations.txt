@@ -8,8 +8,10 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (annotation_line)
     (empty_line))
 
@@ -25,12 +27,15 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (annotation_line))
     (empty_line))
 
@@ -48,15 +53,20 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
-        (richtext_line)
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext))
         (annotation_line)
-        (richtext_line))
+        (richtext_line
+            (plaintext)))
     (empty_line))
 
 
@@ -71,11 +81,14 @@ then...
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (annotation_line)))
     (empty_line))
 
@@ -92,13 +105,17 @@ then...
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (annotation_line)
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 
 
@@ -113,11 +130,14 @@ then...
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (ordered_list
         (ordered_list_item
-            (richtext_line)
+            (richtext_line
+                (plaintext))
             (annotation_line)))
     (empty_line))
 
@@ -133,11 +153,14 @@ then...
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (unordered_list
         (unordered_list_item
-            (richtext_line)))
+            (richtext_line
+                (plaintext))))
     (annotation_line)
     (empty_line))
 
@@ -156,17 +179,22 @@ then some other stuff:
 ---
 
 (document
-    (richtext_line)
-    (richtext_line)
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext))
     (node
         (node_title
             (node_title_line
-                (richtext_line)))
+                (richtext_line
+                    (plaintext))))
         (node
             (node_title
                 (node_title_line
-                    (richtext_line)))
-            (richtext_line))
+                    (richtext_line
+                        (plaintext))))
+            (richtext_line
+                (plaintext)))
         (empty_line)
         (annotation_line))
     (empty_line))
