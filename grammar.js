@@ -262,19 +262,23 @@ module.exports = grammar({
             repeat1($._DIGIT), $._DECIMAL_SEPARATOR, repeat($._DIGIT)),
 
         mention: $ => seq(
-            '@', field('target', choice($._string, $._sugared_string))),
+            $._ext_valtype_marker_mention,
+            field('target', choice($._string, $._sugared_string))),
         tag: $ => seq(
-            '#', field('target', choice($._string, $._sugared_string))),
+            $._ext_valtype_marker_tag,
+            field('target', choice($._string, $._sugared_string))),
         variable: $ => seq(
-            '$', field('target', choice($._string, $._sugared_string))),
+            $._ext_valtype_marker_variable,
+            field('target', choice($._string, $._sugared_string))),
         ref: $ => seq(
-            '&', field('target', choice($._string, $._sugared_string))),
+            $._ext_valtype_marker_ref,
+            field('target', choice($._string, $._sugared_string))),
         // Note: these are only valid in brackets, NOT as a normal metadata
         // value!
         uri: $ => field('target', choice($._string, $._sugared_uri)),
 
         // These are used for @mentions, #tags, etc
-        _sugared_string: $ => /[^\s'"\[\]\{\}\(\)@#$&;]+/,
+        _sugared_string: $ => /[^\s'"\[\]\{\}\(\)<>@#$&;]+/,
         // RFC 2396, Appendix A describes valid characters for the schema,
         // which we use to force non-collision with @mentions, #tags, etc
         _sugared_uri: $ => /[A-z]([A-z0-9\+\-\.])*:[A-Za-z0-9-._~:/?#@!$&*+,%=]+/,
@@ -313,14 +317,15 @@ module.exports = grammar({
                 prec.dynamic(1, $.fmt_bracket_metadata))),
 
         fmt_bracket_anon_link: $ => seq(
-            $.richtext_line,
-            // choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            // $.richtext_line,
+            $._ext_fmt_bracket_flag_anon_link,
+            choice($.mention, $.tag, $.variable, $.ref, $.uri),
             $._ext_fmt_bracket_close_anon_link),
         fmt_bracket_named_link: $ => seq(
             $.richtext_line,
             $._ext_fmt_bracket_delimit_named_link,
-            $.richtext_line,
-            // choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            // $.richtext_line,
+            choice($.mention, $.tag, $.variable, $.ref, $.uri),
             $._ext_fmt_bracket_close_named_link),
         fmt_bracket_metadata: $ => seq(
             $.richtext_line,
@@ -361,6 +366,10 @@ module.exports = grammar({
         $._ext_ol_index,
         $._ext_ol_marker,
         $._ext_ul_marker,
+        $._ext_valtype_marker_mention,
+        $._ext_valtype_marker_tag,
+        $._ext_valtype_marker_variable,
+        $._ext_valtype_marker_ref,
         $._ext_annotation_marker,
         $._ext_eof,
         $._ext_fmt_escape_pipe,
@@ -372,6 +381,12 @@ module.exports = grammar({
         $._ext_fmt_emphasis,
         $._ext_fmt_strike,
         $._ext_fmt_bracket_open,
+        // This is a workaround for treesitter. It refuses to back up to try
+        // different parse tree branches after richtext was already found,
+        // so this lets us do the lookahead for the bracket first, to see if
+        // it's an anon link, and if so, force tree sitter to parse things
+        // that way instead
+        $._ext_fmt_bracket_flag_anon_link,
         $._ext_fmt_bracket_delimit_named_link,
         $._ext_fmt_bracket_delimit_metadata,
         $._ext_fmt_bracket_close_anon_link,

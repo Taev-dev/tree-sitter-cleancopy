@@ -67,7 +67,23 @@
       "required": true,
       "types": [
         {
-          "type": "richtext_line",
+          "type": "mention",
+          "named": true
+        },
+        {
+          "type": "ref",
+          "named": true
+        },
+        {
+          "type": "tag",
+          "named": true
+        },
+        {
+          "type": "uri",
+          "named": true
+        },
+        {
+          "type": "variable",
           "named": true
         }
       ]
@@ -101,7 +117,27 @@
       "required": true,
       "types": [
         {
+          "type": "mention",
+          "named": true
+        },
+        {
+          "type": "ref",
+          "named": true
+        },
+        {
           "type": "richtext_line",
+          "named": true
+        },
+        {
+          "type": "tag",
+          "named": true
+        },
+        {
+          "type": "uri",
+          "named": true
+        },
+        {
+          "type": "variable",
           "named": true
         }
       ]
@@ -547,6 +583,26 @@
     }
   },
   {
+    "type": "uri",
+    "named": true,
+    "fields": {
+      "target": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "STRING1",
+            "named": true
+          },
+          {
+            "type": "STRING2",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "variable",
     "named": true,
     "fields": {
@@ -570,22 +626,6 @@
     "type": "version_comment",
     "named": true,
     "fields": {}
-  },
-  {
-    "type": "#",
-    "named": false
-  },
-  {
-    "type": "$",
-    "named": false
-  },
-  {
-    "type": "&",
-    "named": false
-  },
-  {
-    "type": "@",
-    "named": false
   },
   {
     "type": "FALSE",

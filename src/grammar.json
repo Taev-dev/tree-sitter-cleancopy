@@ -1014,8 +1014,8 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
-          "value": "@"
+          "type": "SYMBOL",
+          "name": "_ext_valtype_marker_mention"
         },
         {
           "type": "FIELD",
@@ -1040,8 +1040,8 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
-          "value": "#"
+          "type": "SYMBOL",
+          "name": "_ext_valtype_marker_tag"
         },
         {
           "type": "FIELD",
@@ -1066,8 +1066,8 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
-          "value": "$"
+          "type": "SYMBOL",
+          "name": "_ext_valtype_marker_variable"
         },
         {
           "type": "FIELD",
@@ -1092,8 +1092,8 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
-          "value": "&"
+          "type": "SYMBOL",
+          "name": "_ext_valtype_marker_ref"
         },
         {
           "type": "FIELD",
@@ -1133,7 +1133,7 @@
     },
     "_sugared_string": {
       "type": "PATTERN",
-      "value": "[^\\s'\"\\[\\]\\{\\}\\(\\)@#$&;]+"
+      "value": "[^\\s'\"\\[\\]\\{\\}\\(\\)<>@#$&;]+"
     },
     "_sugared_uri": {
       "type": "PATTERN",
@@ -1234,7 +1234,32 @@
       "members": [
         {
           "type": "SYMBOL",
-          "name": "richtext_line"
+          "name": "_ext_fmt_bracket_flag_anon_link"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "mention"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "tag"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "variable"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "ref"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "uri"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -1254,8 +1279,29 @@
           "name": "_ext_fmt_bracket_delimit_named_link"
         },
         {
-          "type": "SYMBOL",
-          "name": "richtext_line"
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "mention"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "tag"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "variable"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "ref"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "uri"
+            }
+          ]
         },
         {
           "type": "SYMBOL",
@@ -1380,6 +1426,22 @@
     },
     {
       "type": "SYMBOL",
+      "name": "_ext_valtype_marker_mention"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_valtype_marker_tag"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_valtype_marker_variable"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_valtype_marker_ref"
+    },
+    {
+      "type": "SYMBOL",
       "name": "_ext_annotation_marker"
     },
     {
@@ -1421,6 +1483,10 @@
     {
       "type": "SYMBOL",
       "name": "_ext_fmt_bracket_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_fmt_bracket_flag_anon_link"
     },
     {
       "type": "SYMBOL",

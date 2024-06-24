@@ -39,6 +39,10 @@ typedef enum {
     TOKEN_MARKER_OL_INDEX,
     TOKEN_MARKER_OL,
     TOKEN_MARKER_UNOL,
+    TOKEN_MARKER_VALTYPE_MENTION,
+    TOKEN_MARKER_VALTYPE_TAG,
+    TOKEN_MARKER_VALTYPE_VARIABLE,
+    TOKEN_MARKER_VALTYPE_REF,
     TOKEN_MARKER_ANNOTATION,
     TOKEN_EOF,
     TOKEN_FMT_ESCAPE_PIPE,
@@ -50,6 +54,7 @@ typedef enum {
     TOKEN_FMT_EMPHASIS,
     TOKEN_FMT_STRIKE,
     TOKEN_FMT_BRACKET_OPEN,
+    TOKEN_FMT_BRACKET_FLAG_ANON_LINK,
     TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK,
     TOKEN_FMT_BRACKET_DELIMIT_METADATA,
     TOKEN_FMT_BRACKET_CLOSE_ANON_LINK,
@@ -78,6 +83,10 @@ const char* _TokenNames[] = {
     "MARKER_OL_INDEX",
     "MARKER_OL",
     "MARKER_UNOL",
+    "MARKER_VALTYPE_MENTION",
+    "MARKER_VALTYPE_TAG",
+    "MARKER_VALTYPE_VARIABLE",
+    "MARKER_VALTYPE_REF",
     "MARKER_ANNOTATION",
     "EoF",
     "FMT_ESCAPE_PIPE",
@@ -89,6 +98,7 @@ const char* _TokenNames[] = {
     "FMT_EMPHASIS",
     "FMT_STRIKE",
     "FMT_BRACKET_OPEN",
+    "FMT_BRACKET_FLAG_ANON_LINK",
     "FMT_BRACKET_DELIMIT_NAMED_LINK",
     "FMT_BRACKET_DELIMIT_METADATA",
     "FMT_BRACKET_CLOSE_ANON_LINK",
@@ -120,6 +130,14 @@ const TokenType FMT_SYMBOLS[] = {
     TOKEN_FMT_BRACKET_CLOSE_ANON_LINK,
     TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK,
     TOKEN_FMT_BRACKET_CLOSE_METADATA
+};
+
+
+const TokenType VALTYPE_MARKER_SYMBOLS[] = {
+    TOKEN_MARKER_VALTYPE_MENTION,
+    TOKEN_MARKER_VALTYPE_TAG,
+    TOKEN_MARKER_VALTYPE_VARIABLE,
+    TOKEN_MARKER_VALTYPE_REF
 };
 
 
@@ -499,7 +517,9 @@ static bool can_parse(
         passed token_types.
         */
         ScanState *scan_state,
-        TokenType token_types[]
+        TokenType token_types[],
+        // ugh I really don't like C. keyword: "array decay"
+        uint8_t token_type_count
 ) {
     if (
         scan_state->negative_match_found
@@ -511,7 +531,7 @@ static bool can_parse(
     TokenType this_token;
     for (
         size_t i = 0;
-        i < (sizeof(token_types) / sizeof(TokenType));
+        i < token_type_count;
         ++i
     ) {
         this_token = token_types[i];
@@ -827,6 +847,24 @@ typedef struct {
     uint8_t chars_advanced;
     uint8_t marker_payload_charcount;
 } SoLMarkerDetection;
+
+
+/*
+typedef struct {
+    int32_t quote_char;
+    int32_t lookbehind_1;
+    int32_t lookbehind_2;
+} StringScanner;
+
+
+static () {
+    if (lexer->lookahead == UNICHR_QUOTE_1) {
+        
+    } else if (lexer->lookahead == UNICHR_QUOTE_2) {
+        
+    }
+}
+*/
 
 
 static SoLMarkerDetection *detect_and_advance_through_annotation_marker(
@@ -2461,6 +2499,87 @@ static void detect_and_schedule_empty_node(
 }
 
 
+static void detect_and_schedule_metadata_valtype_marker(
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    if (lexer->lookahead == UNICHR_AT) {
+        schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_MENTION, 1, false);
+        
+    } else if (lexer->lookahead == UNICHR_HASH) {
+        schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_TAG, 1, false);
+        
+    } else if (lexer->lookahead == UNICHR_DOLLAR) {
+        schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_VARIABLE, 1, false);
+        
+    } else if (lexer->lookahead == UNICHR_AMPERSAND) {
+        schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_REF, 1, false);
+    }
+}
+
+
+static void detect_and_schedule_bracketed_anon_link_flag(
+        /* Aight so here's the problem. Once treesitter sees a valid external
+        token for a richtext character, it refuses to retry any other part of
+        the parse tree. So although [[foo](bar)] and [[https://foo.bar]] aren't
+        actually ambiguous, tree sitter finds itself in an unrecoverable error
+        state where it can't distinguish between the two of them, because it
+        gets stuck down the one branch, thinking everything is a URI and then
+        erroring the second you see the ``](`` delimiter, or thinking
+        everything is richtext and then getting equally screwed up when it
+        just blows past the end of the anon link bracket.
+
+        As a workaround, we check the formatting bracket in advance, and
+        schedule a zero-width token for an anon link, forcing tree sitter to
+        traverse THAT branch of the parse tree.
+
+        KNOWN BUG: this won't work if you have a string URI that includes a
+        formatting delimiter in the URI. This is just going to be unsupported
+        until we move away from treesitter. Sorry, it's just too complicated
+        for something that is arguably an improper URL character sequence.
+        */
+        TSLexer *lexer,
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    // Effectively a while (true)
+    while (!lexer->eof(lexer)) {
+        if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+            advance_lexer(lexer, scan_state, false);
+
+            // Case 1: we found a closing marker for the bracket, making it an
+            // anon link. Schedule the ZWT
+            if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
+                schedule_token(
+                    scanner, scan_state, TOKEN_FMT_BRACKET_FLAG_ANON_LINK, 0, true);
+                break;
+
+            // Case 2: we found a delimiter for anything else. NOT an anon;
+            // return without scheduling
+            } else if (
+                lexer->lookahead == UNICHR_PARENS_OPEN
+                || lexer->lookahead == UNICHR_ANGLE_BRACKET_OPEN
+            ){
+                break;
+            }
+
+        // Case 3: we found a line break. Also NOT an anon; return without
+        // scheduling (technically incorrect, but since we currently can't
+        // support multi-line formatting brackets anyways -- another treesitter
+        // limitation -- we can piggyback off of that to prevent a bunch of
+        // needless re-parsing and let treesitter handle the error)
+        } else if (lexer->lookahead == UNICHR_NEWLINE) {
+            break;
+        }
+
+        // Otherwise, we haven't found a relevant character yet, so we need
+        // to keep looking within the bracket until we do
+        advance_lexer(lexer, scan_state, false);
+    }
+}
+
+
 static void detect_and_schedule_node_metadata_key(
         /* This checks for a valid metadata identifier **on a node**.
         Note that this cannot be used on inline metadata keys (without
@@ -2694,6 +2813,10 @@ static void detect_and_schedule_formatting(
             detection->token,
             2,
             true);
+
+        // This is a workaround for treesitter getting hyperfocused on the wrong
+        // parse branch; see the docstring in the function
+        detect_and_schedule_bracketed_anon_link_flag(lexer, scanner, scan_state);
         return;
     }
 
@@ -2965,7 +3088,7 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         // But do note that if we're at the EoF, all other tokens are invalid, and
         // should be skipped (to help avoid errors and weird states)
         } else {
-            // debug("--- checkpoint1. valid symbols:\n");
+            // debug("--- valid symbols:\n");
             // for (
             //     size_t i = _TOKEN_ERROR_SENTINEL;
             //     i <= _TOKEN_SCANNER_ERROR_SENTINEL;
@@ -2979,29 +3102,32 @@ bool tree_sitter_cleancopy_external_scanner_scan(
             // Note that, except at the very beginning of the document (as in,
             // literally the first line) this is tacked on to the EoL handling
             // for the previous line
-            if (can_parse(scan_state, SOL_SYMBOLS)) {
+            if (can_parse(scan_state, SOL_SYMBOLS, COUNT_OF(SOL_SYMBOLS))) {
                 peek_and_schedule_start_of_line(lexer, scanner, scan_state);}
             // The actual empty node symbol is handled by the treesitter-internal
             // lexer, but we need to do some state cleanup (to remove the pending
             // node info from the scanner).
             // I'm not 100% sure why, but currently this needs to be before the
             // node metadata sentinel.
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_EMPTY})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_EMPTY}, 1)){
                 detect_and_schedule_empty_node(lexer, scanner, scan_state);}
             // We use this sentinel to force treesitter into our external scanner,
             // so we can examine the metadata key, and decide whether it indicates
             // a pending embed node
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_METADATA_KEY})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_METADATA_KEY}, 1)){
                 detect_and_schedule_node_metadata_key(lexer, scanner, scan_state);}
 
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_EOL})){
+            if (can_parse(scan_state, VALTYPE_MARKER_SYMBOLS, COUNT_OF(VALTYPE_MARKER_SYMBOLS))) {
+                detect_and_schedule_metadata_valtype_marker(lexer, scanner, scan_state);}
+
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_EOL}, 1)){
                 detect_and_schedule_eol(lexer, scanner, scan_state);}
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_DEF})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_DEF}, 1)){
                 detect_and_schedule_node_def(lexer, scanner, scan_state);}
 
             // Always prefer trailing whitespace to NIH whitespace and plaintext
             // chars, but also be careful because of mutual consumption problems
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_TRAILING_WHITESPACE})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_TRAILING_WHITESPACE}, 1)){
                 detect_and_schedule_trailing_whitespace(lexer, scanner, scan_state);}
 
             // Note that we have to explicitly check for richtext chars here,
@@ -3010,18 +3136,18 @@ bool tree_sitter_cleancopy_external_scanner_scan(
             // valid. Also: this needs to be immediately before the richtext
             // chars; otherwise we can clobber the above stuff
             if (
-                can_parse(scan_state, FMT_SYMBOLS)
-                || can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR})
+                can_parse(scan_state, FMT_SYMBOLS, COUNT_OF(FMT_SYMBOLS))
+                || can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR}, 1)
             ) {
                 detect_and_schedule_formatting(lexer, scanner, scan_state);}
 
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR})) {
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_RICHTEXT_CHAR}, 1)) {
                 detect_and_schedule_richtext_char(lexer, scanner, scan_state);}
 
             // Note: this needs to be last, because at EoL we want to always
             // swallow trailing whitespace, but it might be part inline stuff
             // instead.
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_NIH_WHITESPACE})){
+            if (can_parse(scan_state, (TokenType[1]){TOKEN_NIH_WHITESPACE}, 1)){
                 detect_and_schedule_nih_whitespace(lexer, scanner, scan_state);}
         }
     }

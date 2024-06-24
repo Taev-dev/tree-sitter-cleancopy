@@ -43,19 +43,33 @@ const int32_t UNICHR_EMBED_MAGIC[] = {
     '_', '_', 'e', 'm', 'b', 'e', 'd', '_', '_'};
 const int32_t UNICHR_METADATA_ASSIGNMENT_SYMBOL = 0x003A;
 
-const int32_t UNICHR_UNDERSCORE = '_';
+// Strings (not currently used)
+const int32_t UNICHR_QUOTE_1 = '\'';
+const int32_t UNICHR_QUOTE_2 = '"';
+
+// Metadata identifiers (also potentially other stuff, like formatting)
 const int32_t UNICHR_HYPHEN = '-';
+const int32_t UNICHR_UNDERSCORE = '_';  // Note: also formatting
+
+// Metadata value type markers
+const int32_t UNICHR_AT = '@';
+const int32_t UNICHR_HASH = '#';  // Note: also annotation lines
+const int32_t UNICHR_DOLLAR = '$';
+const int32_t UNICHR_AMPERSAND = '&';
+
+// Lists
+const int32_t UNICHR_DOT = '.';
+const int32_t UNICHR_PLUS = '+';
+
+// Formatting sugar
 const int32_t UNICHR_BSLASH = '\\';
 const int32_t UNICHR_PIPE = '|';
-const int32_t UNICHR_HASH = '#';
 const int32_t UNICHR_CARET = '^';
 const int32_t UNICHR_BACKTICK = '`';
 const int32_t UNICHR_ASTERISK = '*';
 const int32_t UNICHR_TILDE = '~';
 
-const int32_t UNICHR_DOT = '.';
-const int32_t UNICHR_PLUS = '+';
-
+// Formatting brackets
 const int32_t UNICHR_SQ_BRACKET_OPEN = '[';
 const int32_t UNICHR_SQ_BRACKET_CLOSE = ']';
 const int32_t UNICHR_ANGLE_BRACKET_OPEN = '<';

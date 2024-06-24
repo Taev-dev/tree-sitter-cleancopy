@@ -73,7 +73,8 @@ Metadata, generic identifier key, multiline string1 value
 :skip
 ==================
 > Node title
-foo: 'bar'
+foo: 'bar
+baz'
 <
 
 ---
