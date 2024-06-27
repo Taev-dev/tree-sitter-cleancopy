@@ -173,6 +173,9 @@ module.exports = grammar({
             // formatting. FFS.
             alias(prec.right(repeat1($._ext_richtext_char)), $.plaintext),
             $._ext_fmt_unescape,
+            $._ext_fmt_escape_pipe,
+            $._ext_fmt_escape_backslash,
+            $.ext_fmt_pre,
             $._fmt_bracket)),
 
         plaintext: $ => repeat1($._plaintext_char),
@@ -375,11 +378,11 @@ module.exports = grammar({
         $._ext_fmt_escape_pipe,
         $._ext_fmt_escape_backslash,
         $._ext_fmt_unescape,
-        $._ext_fmt_code,
-        $._ext_fmt_underline,
-        $._ext_fmt_strong,
-        $._ext_fmt_emphasis,
-        $._ext_fmt_strike,
+        $.ext_fmt_pre,
+        $.ext_fmt_underline,
+        $.ext_fmt_strong,
+        $.ext_fmt_emphasis,
+        $.ext_fmt_strike,
         $._ext_fmt_bracket_open,
         // This is a workaround for treesitter. It refuses to back up to try
         // different parse tree branches after richtext was already found,

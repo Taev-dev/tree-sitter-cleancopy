@@ -251,3 +251,51 @@ an inline metadata bracket: [[foo [[oof]<rab: 'rab'>]]<bar: 'bar'>]
                     (node_metadata_key)
                     (metadata_value
                         (STRING1)))))))
+
+
+==================
+Root node fmt-pre
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline fmt-pre: ``[[``
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_pre)
+        (plaintext)
+        (ext_fmt_pre)))
+
+
+==================
+Root node fmt-escape-pipe
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline fmt-escape-pipe: ||[[||
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (plaintext)))
+
+
+==================
+Root node fmt-escape-backslash, w/ trailing
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline fmt-escape-backslash: \\[[\\ -- plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (plaintext)
+        (plaintext)))

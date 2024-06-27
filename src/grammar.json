@@ -730,6 +730,18 @@
           },
           {
             "type": "SYMBOL",
+            "name": "_ext_fmt_escape_pipe"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_ext_fmt_escape_backslash"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "ext_fmt_pre"
+          },
+          {
+            "type": "SYMBOL",
             "name": "_fmt_bracket"
           }
         ]
@@ -1462,23 +1474,23 @@
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_fmt_code"
+      "name": "ext_fmt_pre"
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_fmt_underline"
+      "name": "ext_fmt_underline"
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_fmt_strong"
+      "name": "ext_fmt_strong"
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_fmt_emphasis"
+      "name": "ext_fmt_emphasis"
     },
     {
       "type": "SYMBOL",
-      "name": "_ext_fmt_strike"
+      "name": "ext_fmt_strike"
     },
     {
       "type": "SYMBOL",

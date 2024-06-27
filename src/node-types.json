@@ -502,6 +502,10 @@
       "required": false,
       "types": [
         {
+          "type": "ext_fmt_pre",
+          "named": true
+        },
+        {
           "type": "fmt_bracket_anon_link",
           "named": true
         },
@@ -649,6 +653,10 @@
   },
   {
     "type": "TRUE",
+    "named": true
+  },
+  {
+    "type": "ext_fmt_pre",
     "named": true
   }
 ]

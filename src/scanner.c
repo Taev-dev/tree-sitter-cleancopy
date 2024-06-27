@@ -48,7 +48,7 @@ typedef enum {
     TOKEN_FMT_ESCAPE_PIPE,
     TOKEN_FMT_ESCAPE_BACKSLASH,
     TOKEN_FMT_UNESCAPE,
-    TOKEN_FMT_CODE,
+    TOKEN_FMT_PRE,
     TOKEN_FMT_UNDERLINE,
     TOKEN_FMT_STRONG,
     TOKEN_FMT_EMPHASIS,
@@ -92,7 +92,7 @@ const char* _TokenNames[] = {
     "FMT_ESCAPE_PIPE",
     "FMT_ESCAPE_BACKSLASH",
     "FMT_UNESCAPE",
-    "FMT_CODE",
+    "FMT_PRE",
     "FMT_UNDERLINE",
     "FMT_STRONG",
     "FMT_EMPHASIS",
@@ -105,7 +105,7 @@ const char* _TokenNames[] = {
     "FMT_BRACKET_CLOSE_NAMED_LINK",
     "FMT_BRACKET_CLOSE_METADATA",
     "RICHTEXT_CHAR",
-    "AUTOCLOSE_WARNING"};
+    "SCANNER_ERROR_SENTINEL"};
 
 
 const TokenType SOL_SYMBOLS[] = {
@@ -119,7 +119,7 @@ const TokenType SOL_SYMBOLS[] = {
 const TokenType FMT_SYMBOLS[] = {
     TOKEN_FMT_ESCAPE_PIPE,
     TOKEN_FMT_ESCAPE_BACKSLASH,
-    TOKEN_FMT_CODE,
+    TOKEN_FMT_PRE,
     TOKEN_FMT_UNDERLINE,
     TOKEN_FMT_STRONG,
     TOKEN_FMT_EMPHASIS,
@@ -174,11 +174,13 @@ typedef struct {
 
 
 typedef enum {
+    // Note that this being 0 is convenient, since we have the other FmtBracket
+    // enum to disambiguate between "null" and FMT_INLINE_METADATA
     FMT_INLINE_METADATA,
 
     FMT_ESCAPE_PIPE,
     FMT_ESCAPE_BACKSLASH,
-    FMT_CODE,
+    FMT_PRE,
     FMT_UNDERLINE,
     FMT_STRONG,
     FMT_EMPHASIS,
@@ -208,6 +210,44 @@ typedef struct {
     size_t advance_count;
     bool skip_mark;
 } PendingToken;
+
+
+static FmtMarker recover_fmt_marker_from_token(
+        /* When we call emit_token, we need a way to recover the FmtMarker
+        associated with a particular TokenType. Instead of refactoring
+        schedule_token and PendingToken so that you can pass some kind
+        of (optional?) payload -- which (keep in mind, this is C code)
+        would be a huge pain in the ass -- we simply use this as a
+        reverse lookup to recover the original FmtMarker based on the
+        token.
+
+        Note that this can't be used with the FMT_INLINE_METADATA
+        without first disambiguating between a non-marker token, since
+        that's what gets used as the default/null value.
+        */
+        TokenType token
+) {
+    switch (token) {
+    case TOKEN_FMT_ESCAPE_PIPE:
+        return FMT_ESCAPE_PIPE;
+    case TOKEN_FMT_ESCAPE_BACKSLASH:
+        return FMT_ESCAPE_BACKSLASH;
+    case TOKEN_FMT_PRE:
+        return FMT_PRE;
+    case TOKEN_FMT_UNDERLINE:
+        return FMT_UNDERLINE;
+    case TOKEN_FMT_STRONG:
+        return FMT_STRONG;
+    case TOKEN_FMT_EMPHASIS:
+        return FMT_EMPHASIS;
+    case TOKEN_FMT_STRIKE:
+        return FMT_STRIKE;
+
+    default:
+        return 0;
+    }
+    
+}
 
 
 // IMPORTANT: if you change anything here, YOU MUST ALSO UPDATE SERIALIZATION!
@@ -413,6 +453,65 @@ typedef struct {
 
     const bool *valid_symbols;
 } ScanState;
+
+
+static void bitmask_set(
+        uint8_t *bitmask,
+        uint8_t bit_index
+) {
+    *bitmask |= (1 << bit_index);
+}
+
+
+static void bitmask_clear(
+        uint8_t *bitmask,
+        uint8_t bit_index
+) {
+    *bitmask &= ~(1 << bit_index);
+}
+
+
+static bool bitmask_get(
+        uint8_t *bitmask,
+        uint8_t bit_index
+) {
+    return (*bitmask & (1 << bit_index));
+}
+
+
+static bool bitmask_has_only(
+        uint8_t *bitmask,
+        uint8_t bit_index
+) {
+    return ((*bitmask) == (1 << bit_index));
+}
+
+
+static bool ensure_no_fmt_interleaving(
+        /* This checks the existing fmt_state against the pending_fmt.
+        It returns True if the resulting state would be valid (and have
+        no interleaving), and False otherwise.
+        */
+        FmtState *fmt_state,
+        FmtMarker pending_fmt
+) {
+    if (fmt_state == NULL) {
+        return true;
+    }
+
+    // If the pending_fmt is marked as active on the fmt_state, then the
+    // this_marker on the existing fmt_state MUST match. Otherwise, we're
+    // trying to end the pending_fmt without first ending the this_marker,
+    // which is interleaving.
+    if (bitmask_get(&fmt_state->fmt_marker_bitmask, pending_fmt)) {
+        return (fmt_state->this_marker == pending_fmt);
+    }
+
+    // If the pending_fmt isn't already active, we don't have to worry about
+    // interleaving yet, because we can just end the pending_fmt before trying
+    // to end the existing fmt_state -- which is nesting, not interleaving.
+    return true;
+}
 
 
 static void advance_lexer(
@@ -642,6 +741,142 @@ static void emit_token(
         scanner->out_of_band_until_eol = true;
     } else if (token == TOKEN_EOL) {
         scanner->out_of_band_until_eol = false;
+
+    // And now all of the formatting shenanigans -----------------------------
+
+    // Opening a formatting bracket: we need to push a format state
+    } else if (token == TOKEN_FMT_BRACKET_OPEN) {
+        // First, we need to create a new formatting state. Init everything to
+        // zero.
+        FmtState *fmt_to_set = ts_calloc(1, sizeof(FmtState));
+            fmt_to_set->this_marker = FMT_INLINE_METADATA;
+            bitmask_set(
+                &fmt_to_set->bracket_state_bitmask,
+                FMT_BRACKET_OPEN);
+
+        // If we already have formatting, we want to copy over the formatting
+        // bitmask. We'll use this to disallow interleaved formatting changes,
+        // by comparing with this_marker; see ensure_no_fmt_interleaving
+        if (scanner->fmt_stack->size > 0) {
+            FmtState *active_fmt = *array_back(scanner->fmt_stack);
+            fmt_to_set->fmt_marker_bitmask = active_fmt->fmt_marker_bitmask;
+
+            // It's never valid to have formatting within the metadata or link
+            // target; this is a defensive assert to make sure we stick to
+            // that invariant
+            if (active_fmt->bracket_state_bitmask) {
+                assert(bitmask_has_only(
+                    &active_fmt->bracket_state_bitmask, FMT_BRACKET_OPEN));
+            }
+        }
+
+        array_push(scanner->fmt_stack, fmt_to_set);
+
+    // We don't push a new formatting state for either of the delimiters, we
+    // just update the existing one
+    } else if (token == TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK) {
+        assert(scanner->fmt_stack->size > 0);
+        FmtState *active_fmt = *array_back(scanner->fmt_stack);
+        bitmask_set(
+            &active_fmt->bracket_state_bitmask,
+            FMT_BRACKET_DELIMIT_NAMED_LINK);
+
+        // This is another check for interleaved formatting. If this were
+        // anything else, it would mean we hadn't fully unwrapped any nested
+        // formatting. Note that we could still have an error state, if there
+        // was a nested bracket and an unclosed nested format, ex:
+        // [[foo **[[bar](#rab)](oof)]], but this is still better than nothing
+        // re: defensive coding
+        assert(active_fmt->this_marker == FMT_INLINE_METADATA);
+    } else if (token == TOKEN_FMT_BRACKET_DELIMIT_METADATA) {
+        assert(scanner->fmt_stack->size > 0);
+        FmtState *active_fmt = *array_back(scanner->fmt_stack);
+        bitmask_set(
+            &active_fmt->bracket_state_bitmask,
+            FMT_BRACKET_DELIMIT_METADATA);
+
+        // This is another check for interleaved formatting. If this were
+        // anything else, it would mean we hadn't fully unwrapped any nested
+        // formatting. Note that we could still have an error state, if there
+        // was a nested bracket and an unclosed nested format, ex:
+        // [[foo **[[bar](#rab)](oof)]], but this is still better than nothing
+        // re: defensive coding
+        assert(active_fmt->this_marker == FMT_INLINE_METADATA);
+
+    // Closing a formatting bracket: we need to pop a formatting state
+    } else if (
+        token == TOKEN_FMT_BRACKET_CLOSE_METADATA
+        || token == TOKEN_FMT_BRACKET_CLOSE_ANON_LINK
+        || token == TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK
+    ) {
+        assert(scanner->fmt_stack->size > 0);
+        FmtState *fmt_to_end = array_pop(scanner->fmt_stack);
+
+        // This is another check for interleaved formatting. If this were
+        // anything else, it would mean we hadn't fully unwrapped any nested
+        // formatting. Note that we could still have an error state, if there
+        // was a nested bracket and an unclosed nested format, ex:
+        // [[foo **[[bar](#rab)](oof)]], but this is still better than nothing
+        // re: defensive coding
+        assert(ensure_no_fmt_interleaving(fmt_to_end, FMT_INLINE_METADATA));
+        ts_free(fmt_to_end);
+
+    // Entering in any other formatting state, we need to either push or pop
+    // depending on whether or not they match
+    } else if (
+        token == TOKEN_FMT_ESCAPE_PIPE
+        || token == TOKEN_FMT_ESCAPE_BACKSLASH
+        || token == TOKEN_FMT_PRE
+        || token == TOKEN_FMT_UNDERLINE
+        || token == TOKEN_FMT_STRONG
+        || token == TOKEN_FMT_EMPHASIS
+        || token == TOKEN_FMT_STRIKE
+    ) {
+        bool is_pop;
+        FmtMarker this_marker = recover_fmt_marker_from_token(token);
+        FmtState *fmt_to_set = NULL;
+
+        // First, normalize re: existing formatting stack and whether or not
+        // this is a push or pop.
+        if (scanner->fmt_stack->size > 0) {
+            FmtState *active_fmt = *array_back(scanner->fmt_stack);
+
+            if (bitmask_get(&active_fmt->bracket_state_bitmask, this_marker)) {
+                is_pop = true;
+            } else {
+                is_pop = false;
+                fmt_to_set = ts_calloc(1, sizeof(FmtState));
+                fmt_to_set->fmt_marker_bitmask = active_fmt->fmt_marker_bitmask;
+                fmt_to_set->bracket_state_bitmask = active_fmt->bracket_state_bitmask;
+            }
+            
+        } else {
+            is_pop = false;
+            fmt_to_set = ts_calloc(1, sizeof(FmtState));
+        }
+
+        // Now, do the actual business logic to manipulate the format stack.
+        if (is_pop) {
+            FmtState *fmt_to_end = array_pop(scanner->fmt_stack);
+            assert(ensure_no_fmt_interleaving(fmt_to_end, this_marker));
+            ts_free(fmt_to_end);
+
+        } else {
+            bitmask_set(
+                &fmt_to_set->fmt_marker_bitmask,
+                this_marker);
+
+            // It's never valid to have formatting within the metadata or link
+            // target; this is a defensive assert to make sure we stick to
+            // that invariant
+            if (fmt_to_set->bracket_state_bitmask){
+                assert(bitmask_has_only(
+                    &fmt_to_set->bracket_state_bitmask, FMT_BRACKET_OPEN));
+            }
+
+            array_push(scanner->fmt_stack, fmt_to_set);
+            
+        }
     }
 }
 
@@ -2680,14 +2915,102 @@ static void detect_and_schedule_node_metadata_key(
 typedef struct {
     bool detected;
     TokenType token;
-} FmtBracketDetection;
+    FmtMarker marker;
+} FmtDetection;
+
+
+static void detect_and_advance_through_fmt_escape_pipe(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_PIPE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_ESCAPE_PIPE;
+
+        if (lexer->lookahead == UNICHR_PIPE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_ESCAPE_PIPE;
+            detection->marker = FMT_ESCAPE_PIPE;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_escape_backslash(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_BSLASH) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_ESCAPE_BACKSLASH;
+
+        if (lexer->lookahead == UNICHR_BSLASH) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_ESCAPE_BACKSLASH;
+            detection->marker = FMT_ESCAPE_BACKSLASH;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_pre(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_BACKTICK) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_PRE;
+
+        if (lexer->lookahead == UNICHR_BACKTICK) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_PRE;
+            detection->marker = FMT_PRE;
+        }
+        
+    }
+}
 
 
 static void detect_and_advance_through_fmt_bracket_open(
         TSLexer *lexer,
         ScanState *scan_state,
-        FmtBracketDetection *detection
+        FmtDetection *detection
 ) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
     if (lexer->lookahead == UNICHR_SQ_BRACKET_OPEN) {
         advance_lexer(lexer, scan_state, false);
         scan_state->post_disambiguation = true;
@@ -2697,6 +3020,7 @@ static void detect_and_advance_through_fmt_bracket_open(
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_OPEN;
+            detection->marker = FMT_INLINE_METADATA;
         }
         
     }
@@ -2706,8 +3030,14 @@ static void detect_and_advance_through_fmt_bracket_open(
 static void detect_and_advance_through_fmt_bracket_close_and_something(
         TSLexer *lexer,
         ScanState *scan_state,
-        FmtBracketDetection *detection
+        FmtDetection *detection
 ) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
     if (lexer->lookahead == UNICHR_SQ_BRACKET_CLOSE) {
         advance_lexer(lexer, scan_state, false);
         scan_state->post_disambiguation = true;
@@ -2718,16 +3048,19 @@ static void detect_and_advance_through_fmt_bracket_close_and_something(
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_CLOSE_ANON_LINK;
+            detection->marker = FMT_INLINE_METADATA;
 
         } else if (lexer->lookahead == UNICHR_ANGLE_BRACKET_OPEN) {
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_DELIMIT_METADATA;
+            detection->marker = FMT_INLINE_METADATA;
 
         } else if (lexer->lookahead == UNICHR_PARENS_OPEN) {
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK;
+            detection->marker = FMT_INLINE_METADATA;
         }
     }
 }
@@ -2736,8 +3069,14 @@ static void detect_and_advance_through_fmt_bracket_close_and_something(
 static void detect_and_advance_through_fmt_bracket_close_named_link(
         TSLexer *lexer,
         ScanState *scan_state,
-        FmtBracketDetection *detection
+        FmtDetection *detection
 ) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
     if (lexer->lookahead == UNICHR_PARENS_CLOSE) {
         advance_lexer(lexer, scan_state, false);
         scan_state->post_disambiguation = true;
@@ -2747,6 +3086,7 @@ static void detect_and_advance_through_fmt_bracket_close_named_link(
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK;
+            detection->marker = FMT_INLINE_METADATA;
         }
         
     }
@@ -2756,8 +3096,14 @@ static void detect_and_advance_through_fmt_bracket_close_named_link(
 static void detect_and_advance_through_fmt_bracket_close_metadata(
         TSLexer *lexer,
         ScanState *scan_state,
-        FmtBracketDetection *detection
+        FmtDetection *detection
 ) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
     if (lexer->lookahead == UNICHR_ANGLE_BRACKET_CLOSE) {
         advance_lexer(lexer, scan_state, false);
         scan_state->post_disambiguation = true;
@@ -2767,8 +3113,8 @@ static void detect_and_advance_through_fmt_bracket_close_metadata(
             advance_lexer(lexer, scan_state, false);
             detection->detected = true;
             detection->token = TOKEN_FMT_BRACKET_CLOSE_METADATA;
+            detection->marker = FMT_INLINE_METADATA;
         }
-        
     }
 }
 
@@ -2798,62 +3144,100 @@ static void detect_and_schedule_formatting(
         return;
     }
 
-    // TODO: first we need to check to see if we're in an escaped context,
-    // either through string escapes or within an inline code block
-    FmtBracketDetection *detection = ts_malloc(sizeof(FmtBracketDetection));
+    FmtState *active_fmt_state = NULL;
+    FmtDetection *detection = ts_malloc(sizeof(FmtDetection));
     detection->detected = false;
     detection->token = 0;
 
+    // First, short circuit if we're in an escaped context.
+    if (scanner->fmt_stack->size > 0) {
+        bool in_escaped_context = false;
+        active_fmt_state = *array_back(scanner->fmt_stack);
+
+        // String escapes prevent all other formatting, as do inline code blocks.
+        // The only difference is that inline code blocks are also sugared to have
+        // __fmt__: 'pre', whereas string-escaped spans are left as-is.
+        if (
+            bitmask_get(&active_fmt_state->fmt_marker_bitmask, FMT_ESCAPE_PIPE)
+        ){
+            in_escaped_context = true;
+            detect_and_advance_through_fmt_escape_pipe(lexer, scan_state, detection);
+        // Other string escape
+        } else if (
+            bitmask_get(&active_fmt_state->fmt_marker_bitmask, FMT_ESCAPE_BACKSLASH)
+        ){
+            in_escaped_context = true;
+            detect_and_advance_through_fmt_escape_backslash(lexer, scan_state, detection);
+        // And finally, FMT_PRE. This is the last escaped context.
+        } else if (
+            bitmask_get(&active_fmt_state->fmt_marker_bitmask, FMT_PRE)
+        ){
+            in_escaped_context = true;
+            detect_and_advance_through_fmt_pre(lexer, scan_state, detection);}
+
+        if (detection->detected) {
+            consume_advances_from_lexer(lexer, scan_state, false);
+            schedule_token(
+                scanner,
+                scan_state,
+                detection->token,
+                2,
+                true);
+        }
+        if (in_escaped_context) {return;}
+    }
+
+    // Note that the individual detection functions are responsible for
+    // making sure we haven't detected anything yet
+    detect_and_advance_through_fmt_escape_pipe(lexer, scan_state, detection);
+    detect_and_advance_through_fmt_escape_backslash(lexer, scan_state, detection);
+    detect_and_advance_through_fmt_pre(lexer, scan_state, detection);
     detect_and_advance_through_fmt_bracket_open(lexer, scan_state, detection);
-    if (detection->detected){
-        consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(
-            scanner,
-            scan_state,
-            detection->token,
-            2,
-            true);
-
-        // This is a workaround for treesitter getting hyperfocused on the wrong
-        // parse branch; see the docstring in the function
-        detect_and_schedule_bracketed_anon_link_flag(lexer, scanner, scan_state);
-        return;
-    }
-
     detect_and_advance_through_fmt_bracket_close_and_something(lexer, scan_state, detection);
-    if (detection->detected){
-        consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(
-            scanner,
-            scan_state,
-            detection->token,
-            2,
-            true);
-        return;
-    }
-
     detect_and_advance_through_fmt_bracket_close_named_link(lexer, scan_state, detection);
-    if (detection->detected){
-        consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(
-            scanner,
-            scan_state,
-            detection->token,
-            2,
-            true);
-        return;
-    }
-
     detect_and_advance_through_fmt_bracket_close_metadata(lexer, scan_state, detection);
+
     if (detection->detected){
+        // Regardless of interleaving, we need to consume the advances, lest
+        // we get stuck on the same characters over and over again
         consume_advances_from_lexer(lexer, scan_state, false);
-        schedule_token(
-            scanner,
-            scan_state,
-            detection->token,
-            2,
-            true);
-        return;
+
+        // We can only schedule this as a normal token if there wasn't any
+        // interleaving -- otherwise we'll hit our defensive assert when
+        // emitting the token.
+        if (
+            active_fmt_state == NULL
+            || ensure_no_fmt_interleaving(active_fmt_state, detection->marker)
+        ) {
+            schedule_token(
+                scanner,
+                scan_state,
+                detection->token,
+                2,
+                true);
+            
+            // This is a workaround for treesitter getting hyperfocused on the
+            // wrong parse branch; see the docstring in the function
+            if (detection->token == TOKEN_FMT_BRACKET_OPEN) {
+                detect_and_schedule_bracketed_anon_link_flag(
+                    lexer, scanner, scan_state);
+            }
+
+        // Currently, we don't try to recover from formatting interleaving;
+        // we just fail. It's not ideal, but... I mean, have you read this
+        // source code? This is a hot mess. We have to draw the line
+        // somewhere.
+        } else {
+            schedule_token(
+                scanner,
+                scan_state,
+                _TOKEN_SCANNER_ERROR_SENTINEL,
+                0,
+                true);
+            // Note: otherwise, continue scheduling things as usual. This
+            // will cause the parse to error, but otherwise complete (I
+            // think?)
+        }
     }
 }
 
