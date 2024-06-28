@@ -271,6 +271,26 @@ an inline fmt-pre: ``[[``
 
 
 ==================
+Root node fmt-pre inside named link
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline fmt-pre within a named link: [[``foo``](https://example.com)]
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (fmt_bracket_named_link
+            (richtext_line
+                (ext_fmt_pre)
+                (plaintext)
+                (ext_fmt_pre))
+            (uri))))
+
+
+==================
 Root node fmt-escape-pipe
 ==================
 This is a simple cleancopy document with plain text in the root node, and

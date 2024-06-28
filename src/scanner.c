@@ -503,8 +503,14 @@ static bool ensure_no_fmt_interleaving(
     // this_marker on the existing fmt_state MUST match. Otherwise, we're
     // trying to end the pending_fmt without first ending the this_marker,
     // which is interleaving.
-    if (bitmask_get(&fmt_state->fmt_marker_bitmask, pending_fmt)) {
-        return (fmt_state->this_marker == pending_fmt);
+    if (
+        bitmask_get(&fmt_state->fmt_marker_bitmask, pending_fmt)
+        && fmt_state->this_marker != pending_fmt
+    ) {
+        debug(
+            "Formatting interleaving detected; bitmask %x, previous %x, pending %x\n",
+            fmt_state->fmt_marker_bitmask, fmt_state->this_marker, pending_fmt);
+        return false;
     }
 
     // If the pending_fmt isn't already active, we don't have to worry about
@@ -746,6 +752,7 @@ static void emit_token(
 
     // Opening a formatting bracket: we need to push a format state
     } else if (token == TOKEN_FMT_BRACKET_OPEN) {
+        debug("^^^ pushing new FmtState to stack\n");
         // First, we need to create a new formatting state. Init everything to
         // zero.
         FmtState *fmt_to_set = ts_calloc(1, sizeof(FmtState));
@@ -758,6 +765,7 @@ static void emit_token(
         // bitmask. We'll use this to disallow interleaved formatting changes,
         // by comparing with this_marker; see ensure_no_fmt_interleaving
         if (scanner->fmt_stack->size > 0) {
+            debug("^^^ note: had entries in fmt_stack\n");
             FmtState *active_fmt = *array_back(scanner->fmt_stack);
             fmt_to_set->fmt_marker_bitmask = active_fmt->fmt_marker_bitmask;
 
@@ -775,6 +783,7 @@ static void emit_token(
     // We don't push a new formatting state for either of the delimiters, we
     // just update the existing one
     } else if (token == TOKEN_FMT_BRACKET_DELIMIT_NAMED_LINK) {
+        debug("^^^ Updating existing FmtState at end of stack\n");
         assert(scanner->fmt_stack->size > 0);
         FmtState *active_fmt = *array_back(scanner->fmt_stack);
         bitmask_set(
@@ -789,6 +798,7 @@ static void emit_token(
         // re: defensive coding
         assert(active_fmt->this_marker == FMT_INLINE_METADATA);
     } else if (token == TOKEN_FMT_BRACKET_DELIMIT_METADATA) {
+        debug("^^^ Updating existing FmtState at end of stack\n");
         assert(scanner->fmt_stack->size > 0);
         FmtState *active_fmt = *array_back(scanner->fmt_stack);
         bitmask_set(
@@ -809,6 +819,7 @@ static void emit_token(
         || token == TOKEN_FMT_BRACKET_CLOSE_ANON_LINK
         || token == TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK
     ) {
+        debug("^^^ Popping latest FmtState at end of stack\n");
         assert(scanner->fmt_stack->size > 0);
         FmtState *fmt_to_end = array_pop(scanner->fmt_stack);
 
@@ -841,9 +852,11 @@ static void emit_token(
         if (scanner->fmt_stack->size > 0) {
             FmtState *active_fmt = *array_back(scanner->fmt_stack);
 
-            if (bitmask_get(&active_fmt->bracket_state_bitmask, this_marker)) {
+            if (bitmask_get(&active_fmt->fmt_marker_bitmask, this_marker)) {
+                debug("^^^ Marker set in formatting bitmask\n");
                 is_pop = true;
             } else {
+                debug("^^^ No marker set in formatting bitmask\n");
                 is_pop = false;
                 fmt_to_set = ts_calloc(1, sizeof(FmtState));
                 fmt_to_set->fmt_marker_bitmask = active_fmt->fmt_marker_bitmask;
@@ -851,20 +864,24 @@ static void emit_token(
             }
             
         } else {
+            debug("^^^ Empty formatting stack\n");
             is_pop = false;
             fmt_to_set = ts_calloc(1, sizeof(FmtState));
         }
 
         // Now, do the actual business logic to manipulate the format stack.
         if (is_pop) {
+            debug("^^^ Previously set. Popping new FmtState from end of stack\n");
             FmtState *fmt_to_end = array_pop(scanner->fmt_stack);
             assert(ensure_no_fmt_interleaving(fmt_to_end, this_marker));
             ts_free(fmt_to_end);
 
         } else {
+            debug("^^^ Not previously set. Pushing new FmtState to end of stack\n");
             bitmask_set(
                 &fmt_to_set->fmt_marker_bitmask,
                 this_marker);
+            fmt_to_set->this_marker = this_marker;
 
             // It's never valid to have formatting within the metadata or link
             // target; this is a defensive assert to make sure we stick to
