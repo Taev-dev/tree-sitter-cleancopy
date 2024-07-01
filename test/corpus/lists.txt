@@ -25,6 +25,65 @@ Here we have a single content row followed by:
 
 
 ==================
+Root UNOL-1 singles w/ EoF emptyline and balanced formatting
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with three items, all single-line, **one with expliclty-closed formatting**
+++  and no indentation changes
+
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (unordered_list
+        (unordered_list_item
+            (richtext_line
+                (plaintext)))
+        (unordered_list_item
+            (richtext_line
+                (plaintext)
+                (ext_fmt_strong)
+                (plaintext)
+                (ext_fmt_strong)))
+        (unordered_list_item
+            (richtext_line
+                (plaintext))))
+    (empty_line))
+
+
+==================
+Root UNOL-1 singles w/ EoF emptyline and autoclosed formatting
+==================
+Here we have a single content row followed by:
+++  an unordered list
+++  with three items, all single-line, **one with implicitly-closed formatting
+++  and no indentation changes
+
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (unordered_list
+        (unordered_list_item
+            (richtext_line
+                (plaintext)))
+        (unordered_list_item
+            (richtext_line
+                (plaintext)
+                (ext_fmt_strong)
+                (plaintext))
+            (fmt_autoclose
+                (ext_fmt_strong)))
+        (unordered_list_item
+            (richtext_line
+                (plaintext))))
+    (empty_line))
+
+
+==================
 Root OL-1 singles w/ EoF emptyline
 ==================
 Here we have a single content row followed by:

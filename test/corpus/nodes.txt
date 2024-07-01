@@ -16,6 +16,7 @@ Single toplevel node, immediate, title-1, no metadata
             (plaintext)))
     (empty_line))
 
+
 ==================
 Single toplevel node, immediate, title-2, no metadata
 ==================
@@ -37,6 +38,7 @@ Single toplevel node, immediate, title-2, no metadata
         (richtext_line
             (plaintext)))
     (empty_line))
+
 
 ==================
 Single toplevel node, delayed, title-1, no metadata
@@ -61,6 +63,7 @@ Preamble content
             (plaintext)))
     (empty_line))
 
+
 ==================
 Single toplevel node, delayed, title-1, no metadata, no empty lines
 ==================
@@ -83,6 +86,7 @@ Trailing content
     (richtext_line
         (plaintext)))
 
+
 ==================
 Single toplevel node, delayed, no title, no metadata
 ==================
@@ -103,6 +107,7 @@ Preamble content
         (richtext_line
             (plaintext)))
     (empty_line))
+
 
 ==================
 Single toplevel node, delayed, title-1, no metadata, empty
@@ -125,6 +130,7 @@ Preamble content
                     (plaintext)))))
     (empty_line))
 
+
 ==================
 Single toplevel node, delayed, no title, no metadata, empty
 ==================
@@ -143,6 +149,7 @@ Preamble content
         (node_title
             (node_title_line)))
     (empty_line))
+
 
 ==================
 Nested nodes, immediate, title-1, no metadata, unwrapping exit
@@ -199,6 +206,7 @@ Root trailing content
         (plaintext))
     (empty_line))
 
+
 ==================
 Nested nodes, immediate, title-1, no metadata, immediate exit
 ==================
@@ -239,3 +247,116 @@ Nested nodes, immediate, title-1, no metadata, immediate exit
                     (plaintext)))))
     (empty_line))
 
+
+==================
+Single toplevel node, fmt-unwind, trailing empty line
+==================
+> Node title
+    Normal content line ^^with fmt-emphasis unwound at eof
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_emphasis)))
+    (empty_line))
+
+
+==================
+Single toplevel node, fmt-unwind, no trailing empty line
+==================
+> Node title
+    Normal content line ^^with fmt-emphasis unwound at eof
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_emphasis))))
+
+
+==================
+Single toplevel node, fmt-unwind via node itself
+==================
+Preamble content with **fmt-strong
+> Node title
+    Normal node content
+
+---
+
+(document
+    (richtext_line
+        (plaintext)
+        (ext_fmt_strong)
+        (plaintext))
+    (fmt_autoclose
+        (ext_fmt_strong))
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext)))
+    (empty_line))
+
+
+==================
+Single toplevel node, fmt-em in title
+==================
+> ^^Node title^^
+    Normal node content
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line
+                    (ext_fmt_emphasis)
+                    (plaintext)
+                    (ext_fmt_emphasis))))
+        (richtext_line
+            (plaintext)))
+    (empty_line))
+
+
+==================
+Single toplevel node, link in title
+==================
+> Sometimes you want [[something](#good)]
+    Normal node content
+
+---
+
+(document
+    (node
+        (node_title
+            (node_title_line
+                (richtext_line
+                    (plaintext)
+                    (fmt_bracket_named_link
+                        (richtext_line
+                            (plaintext))
+                        (tag)))))
+        (richtext_line
+            (plaintext)))
+    (empty_line))

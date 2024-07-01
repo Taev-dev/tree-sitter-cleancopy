@@ -18,6 +18,9 @@ typedef enum {
     We use the _ERROR_SENTINEL to detect this.
     */
     _TOKEN_ERROR_SENTINEL,
+    // We use this to ensure that the very first line can peek ahead (like we
+    // otherwise do from EoL) without consuming characters
+    TOKEN_SOF,
     // We use this to force examination of metadata declarations to figure out
     // if it's an embed node
     TOKEN_METADATA_KEY,
@@ -60,11 +63,13 @@ typedef enum {
     TOKEN_FMT_BRACKET_CLOSE_ANON_LINK,
     TOKEN_FMT_BRACKET_CLOSE_NAMED_LINK,
     TOKEN_FMT_BRACKET_CLOSE_METADATA,
+    TOKEN_FMT_AUTOCLOSE,
     TOKEN_RICHTEXT_CHAR,
     _TOKEN_SCANNER_ERROR_SENTINEL,
 } TokenType;
 const char* _TokenNames[] = {
     "_ERROR_SENTINEL",
+    "SOF",
     "METADATA_KEY",
     "NODE_EMPTY",
     "FLAG_EMBED",
@@ -104,6 +109,7 @@ const char* _TokenNames[] = {
     "FMT_BRACKET_CLOSE_ANON_LINK",
     "FMT_BRACKET_CLOSE_NAMED_LINK",
     "FMT_BRACKET_CLOSE_METADATA",
+    "FMT_AUTOCLOSE",
     "RICHTEXT_CHAR",
     "SCANNER_ERROR_SENTINEL"};
 
@@ -246,7 +252,32 @@ static FmtMarker recover_fmt_marker_from_token(
     default:
         return 0;
     }
-    
+}
+
+
+static TokenType get_token_for_fmt_marker(
+        /* ... le sigh. I miss python. C is so very tedious. */
+        FmtMarker fmt_marker
+) {
+    switch (fmt_marker) {
+    case FMT_ESCAPE_PIPE:
+        return TOKEN_FMT_ESCAPE_PIPE;
+    case FMT_ESCAPE_BACKSLASH:
+        return TOKEN_FMT_ESCAPE_BACKSLASH;
+    case FMT_PRE:
+        return TOKEN_FMT_PRE;
+    case FMT_UNDERLINE:
+        return TOKEN_FMT_UNDERLINE;
+    case FMT_STRONG:
+        return TOKEN_FMT_STRONG;
+    case FMT_EMPHASIS:
+        return TOKEN_FMT_EMPHASIS;
+    case FMT_STRIKE:
+        return TOKEN_FMT_STRIKE;
+
+    default:
+        return 0;
+    }
 }
 
 
@@ -275,6 +306,8 @@ typedef struct {
     // so we don't emit a bunch of erroneous NIH whitespace)
     bool out_of_band_until_eol;
 
+    // We use this to denote that we haven't yet emitted the SoF
+    bool pre_sof;
     // We use this to denote that we've already processed the EoF and added
     // any trailing zero-length tokens to the backlog. If this is true, and
     // the token backlog is consumed, then parsing is finished.
@@ -292,6 +325,7 @@ size_t _SCANNER_FIELD_LENGTHS[] = {
     sizeof(uint8_t),
     sizeof(bool),
     sizeof(ListStatus),
+    sizeof(bool),
     sizeof(bool),
     sizeof(bool)};
 
@@ -323,6 +357,7 @@ void *tree_sitter_cleancopy_external_scanner_create(
     scanner->token_backlog_index = 0;
     scanner->pending_embed_node = false;
     scanner->pending_list_status = LSTAT_NO_LIST;
+    scanner->pre_sof = true;
     scanner->post_eof = false;
     scanner->out_of_band_until_eol = false;
     array_init(scanner->context_stack);
@@ -1083,7 +1118,8 @@ typedef enum {
 typedef enum {
     MARKER_OL,
     MARKER_UNOL,
-    MARKER_ANNOTATION
+    MARKER_ANNOTATION,
+    MARKER_NODE_DEF
 } SoLMarker;
 
 
@@ -1101,22 +1137,98 @@ typedef struct {
 } SoLMarkerDetection;
 
 
-/*
-typedef struct {
-    int32_t quote_char;
-    int32_t lookbehind_1;
-    int32_t lookbehind_2;
-} StringScanner;
+static void unwind_fmt_stack_and_schedule_implicit_end_markers(
+        /* There are several situations where we implicitly unwind the
+        formatting stack (as best we can -- fmt brackets cannot be implicitly
+        unwound, because there's too much guesswork involved): empty lines,
+        node/list beginnings, and EoFs.
 
+        This is responsible for actually unwinding the formatting stack
+        and scheduling whatever implicit end markers need to be added
+        for the formatting stack to be cleared. ^^It is **not** responsible
+        for actually popping items off the formatting stack;^^ this is
+        handled within emit_token.
+        */
+        Scanner *scanner,
+        ScanState *scan_state
+) {
+    // Important: these two need to be separate to we avoid overflow errors
+    // when we check the condition below!
+    uint8_t fmt_stack_size = scanner->fmt_stack->size;
+    int8_t fmt_stack_index = fmt_stack_size - 1;
 
-static () {
-    if (lexer->lookahead == UNICHR_QUOTE_1) {
-        
-    } else if (lexer->lookahead == UNICHR_QUOTE_2) {
-        
+    if (fmt_stack_size > 0) {
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_FMT_AUTOCLOSE,
+            0,
+            true);
+
+        while (fmt_stack_index >= 0) {
+            FmtState *fmt_to_popschedule = *array_get(
+                scanner->fmt_stack, fmt_stack_index);
+
+            // This is the one situation we can't implicitly close, but we need
+            // to mark it somehow, so... error it is!
+            if (fmt_to_popschedule->this_marker == FMT_INLINE_METADATA) {
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    _TOKEN_SCANNER_ERROR_SENTINEL,
+                    0,
+                    true);
+
+            // Otherwise we can schedule an implicit marker. In the future,
+            // we'll want to allow the ability to detect auto-closing, so it
+            // can be (for example) forbidden in the style guide, but that's
+            // more complicated than it's worth for the treesitter parser/scanner.
+            } else {
+                schedule_token(
+                    scanner,
+                    scan_state,
+                    get_token_for_fmt_marker(fmt_to_popschedule->this_marker),
+                    0,
+                    true);
+            }
+
+            fmt_stack_index -= 1;
+        }
     }
 }
-*/
+
+
+static SoLMarkerDetection *detect_and_advance_through_node_def(
+        /* So... the problem is, treesitter doesn't have a robust
+        mechanism for defining terminal precedence. So we can't say
+        "try the node def symbol before trying anything else". And
+        because an empty node declaration is indistinguishable from
+        normal node content without that preemption, it means that
+        treesitter never detects that it's down the wrong branch of the
+        parse tree. Therefore, we need a way to define terminal
+        precedence.
+
+        Luckily, the external scanner is always called first, before any
+        internal lexing. This lets us hard-code the precedence within
+        the order of detection calls within the external_scan entrypoint.
+        */
+        TSLexer *lexer,
+        ScanState *scan_state
+) {
+    SoLMarkerDetection *detection = ts_malloc(sizeof(SoLMarkerDetection));
+    detection->marker = MARKER_NODE_DEF;
+    detection->chars_advanced = 0;
+    detection->detected = false;
+    detection->marker_payload_charcount = 0;
+
+    if (lexer->lookahead == UNICHR_NODEDEF_SYMBOL) {
+        detection->chars_advanced += 1;
+        advance_lexer(lexer, scan_state, false);
+        detection->detected = true;
+    }
+
+    return detection;
+}
 
 
 static SoLMarkerDetection *detect_and_advance_through_annotation_marker(
@@ -1217,6 +1329,19 @@ static SoLMarkerDetection *detect_and_advance_through_SoL_marker(
         ScanState *scan_state
 ) {
     SoLMarkerDetection *detection;
+
+    detection = detect_and_advance_through_node_def(lexer, scan_state);
+    if (detection->detected) {
+        return detection;
+    } else if (detection->chars_advanced) {
+        debug(
+            "... chars_advanced within SoL marker detection (node def); "
+            "returning null\n");
+        ts_free(detection);
+        return NULL;
+    } else {
+        ts_free(detection);
+    }
 
     detection = detect_and_advance_through_unol_marker(lexer, scan_state);
     if (detection->detected) {
@@ -1501,6 +1626,7 @@ static void handle_eof_after_nonempty_line(
     // It also prevents accidentally calling handle_eof twice after processing
     // an empty line immediately preceeding the EoF.
     scanner->post_eof = true;
+    unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
 
     if (scanner->context_stack->size > 0) {
         for (
@@ -1577,9 +1703,9 @@ static void schedule_indentation_increased(
         Array(SoLWhitespace *) * empty_lines
 ){
     debug("... scheduling indentation increased\n");
-    // Note: empty lines go before any node/list beginnings, but -- when we implement
-    // formatting -- we'll also need to schedule any formatting pops if
-    // an empty line was detected (und zwar, **before** the empty lines!)
+    // Note: empty lines go before any node/list beginnings, but implicit
+    // formatting closure comes before that
+    unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
     schedule_empty_lines(scanner, scan_state, empty_lines);
 
     // Note: NOT the same as the first_nonempty_line, because we might have
@@ -1679,7 +1805,7 @@ static void schedule_indentation_increased(
                     TOKEN_MARKER_UNOL,
                     2,
                     false);
-            } 
+            }
 
         // Up until now, it's been zero-length tokens to handle indentation
         // changes, but we can (must!) also schedule the node_continue from
@@ -1692,16 +1818,24 @@ static void schedule_indentation_increased(
                 np1_indentation_level * scanner->indentation_char_repetitions,
                 false);
             
-            if (
-                marker_detection != NULL && marker_detection->detected
-                && marker_detection->marker == MARKER_ANNOTATION
-            ) {
-                schedule_token(
-                    scanner,
-                    scan_state,
-                    TOKEN_MARKER_ANNOTATION,
-                    2,
-                    false);
+            if (marker_detection != NULL && marker_detection->detected) {
+                if (marker_detection->marker == MARKER_ANNOTATION) {
+                    schedule_token(
+                        scanner,
+                        scan_state,
+                        TOKEN_MARKER_ANNOTATION,
+                        2,
+                        false);
+
+                } else {
+                    assert(marker_detection->marker == MARKER_NODE_DEF);
+                    schedule_token(
+                        scanner,
+                        scan_state,
+                        TOKEN_NODE_DEF,
+                        1,
+                        false);
+                }
             }
         }
 
@@ -1804,9 +1938,12 @@ static void schedule_indentation_decreased(
     // active formatting, even though there's no context
     if (active_context == NULL) {
         assert(classification->sol_indent_action == SOL_IS_EOF);
+        unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
         schedule_empty_lines(scanner, scan_state, empty_lines);
 
     } else {
+        unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+
         // MUST BE SIGNED! We're expecting this to be negative, so we need to
         // avoid wraparound errors!
         int16_t context_index = scanner->context_stack->size - 1;
@@ -2079,6 +2216,8 @@ static void schedule_indentation_held(
     // Empty lines break up the list into a new list
     if (list_status != LSTAT_NO_LIST && empty_lines->size != 0) {
         assert(marker_detection != NULL && marker_detection->detected);
+        // Note that this needs to be BEFORE the list end!
+        unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
         schedule_token(
             scanner,
             scan_state,
@@ -2196,6 +2335,8 @@ static void schedule_indentation_held(
         // ordered list. Since this was also classified as an indentation held,
         // that means this is simply a new list row.
         } else if (marker_detection->marker == MARKER_OL) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+
             // The node_continue consumes any indentation up to the node level
             schedule_token(
                 scanner,
@@ -2233,6 +2374,7 @@ static void schedule_indentation_held(
         // this was also classified as an indentation held, we need to close
         // the previous ordered list and start a new unordered list.
         } else if (marker_detection->marker == MARKER_UNOL) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
             // These are both zero-width. Positionally, they're at the very
             // beginning of the first nonempty line.
             schedule_token(
@@ -2274,6 +2416,8 @@ static void schedule_indentation_held(
                 2,
                 false);
 
+        // Note that this is not a valid position for a node def, since we're
+        // WITHIN a list item
         } else {
             assert(marker_detection->marker == MARKER_ANNOTATION);
 
@@ -2341,6 +2485,7 @@ static void schedule_indentation_held(
         // unordered list. Since this was also classified as an indentation held,
         // that means this is simply a new list row.
         } else if (marker_detection->marker == MARKER_UNOL) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
             // The node_continue consumes any indentation up to the node level
             schedule_token(
                 scanner,
@@ -2372,6 +2517,7 @@ static void schedule_indentation_held(
         // this was also classified as an indentation held, we need to close
         // the previous ordered list and start a new ordered list.
         } else if (marker_detection->marker == MARKER_OL) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
             // These are both zero-width. Positionally, they're at the very
             // beginning of the first nonempty line.
             schedule_token(
@@ -2419,6 +2565,8 @@ static void schedule_indentation_held(
                 2,
                 false);
 
+        // Note that this is not a valid position for a node def, since we're
+        // WITHIN a list item
         } else {
             assert(marker_detection->marker == MARKER_ANNOTATION);
 
@@ -2455,10 +2603,34 @@ static void schedule_indentation_held(
     // We're not in a list (yet), but we found a marker at the beginning of
     // the line
     } else if (marker_detection != NULL) {
-        schedule_empty_lines(scanner, scan_state, empty_lines);
+        if (empty_lines->size > 0) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+            schedule_empty_lines(scanner, scan_state, empty_lines);
+        }
 
+        if (marker_detection->marker == MARKER_NODE_DEF) {
+            if (empty_lines->size == 0) {
+                unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+            }
+
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_CONTINUE,
+                n_indentation_chars,
+                false);
+            schedule_token(
+                scanner,
+                scan_state,
+                TOKEN_NODE_DEF,
+                1,
+                false);
+            
         // Starting an ordered list
-        if (marker_detection->marker == MARKER_OL) {
+        } else if (marker_detection->marker == MARKER_OL) {
+            if (empty_lines->size == 0) {
+                unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+            }
             scanner->pending_list_status = LSTAT_OL;
             schedule_token(
                 scanner,
@@ -2500,6 +2672,9 @@ static void schedule_indentation_held(
 
         // Starting an unordered list
         } else if (marker_detection->marker == MARKER_UNOL) {
+            if (empty_lines->size == 0) {
+                unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+            }
             scanner->pending_list_status = LSTAT_UNOL;
             schedule_token(
                 scanner,
@@ -2557,9 +2732,12 @@ static void schedule_indentation_held(
     // content line, and all we need is the NODE_CONTINUE.
     } else {
         // Note: empty lines go before any continuations, but we need to be
-        // careful about auto-closing any formatting state, when we get to that
+        // careful about auto-closing any formatting state
         // point
-        schedule_empty_lines(scanner, scan_state, empty_lines);
+        if (empty_lines->size > 0) {
+            unwind_fmt_stack_and_schedule_implicit_end_markers(scanner, scan_state);
+            schedule_empty_lines(scanner, scan_state, empty_lines);
+        }
         // This consumes any indentation up to the node level.
         schedule_token(
             scanner,
@@ -2630,6 +2808,8 @@ static void peek_and_schedule_start_of_line(
         // It also prevents accidentally calling handle_eof twice after processing
         // an empty line immediately preceeding the EoF.
         scanner->post_eof = true;
+        // Note that unwinding the format stack is handled within
+        // schedule_indentation_decreased!
         array_push(empty_lines, first_nonempty_line);
         classification = ts_malloc(sizeof(SoLIndentationClassification));
         classification->sol_indent_action = SOL_IS_EOF;
@@ -2668,6 +2848,24 @@ static void peek_and_schedule_start_of_line(
             marker_detection, empty_lines);
     }
 
+    uint16_t nih_whitespace_count = 0;
+    while (
+        !lexer->eof(lexer)
+        && is_horizontal_whitespace(lexer->lookahead)
+    ) {
+        nih_whitespace_count += 1;
+        advance_lexer(lexer, scan_state, false);
+    }
+
+    if (nih_whitespace_count) {
+        schedule_token(
+            scanner,
+            scan_state,
+            TOKEN_NIH_WHITESPACE,
+            nih_whitespace_count,
+            false);
+    }
+
     array_delete(empty_lines);
 }
 
@@ -2703,30 +2901,6 @@ static void detect_and_schedule_eol(
         debug("... peeking ahead; don't mind me!\n");
         // The docstring for peek_and_schedule_SoL explains this thoroughly
         peek_and_schedule_start_of_line(lexer, scanner, scan_state);
-    }
-}
-
-
-static void detect_and_schedule_node_def(
-        /* So... the problem is, treesitter doesn't have a robust
-        mechanism for defining terminal precedence. So we can't say
-        "try the node def symbol before trying anything else". And
-        because an empty node declaration is indistinguishable from
-        normal node content without that preemption, it means that
-        treesitter never detects that it's down the wrong branch of the
-        parse tree. Therefore, we need a way to define terminal
-        precedence.
-
-        Luckily, the external scanner is always called first, before any
-        internal lexing. This lets us hard-code the precedence within
-        the order of detection calls within the external_scan entrypoint.
-        */
-        TSLexer *lexer,
-        Scanner *scanner,
-        ScanState *scan_state
-) {
-    if (lexer->lookahead == UNICHR_NODEDEF_SYMBOL) {
-        schedule_token(scanner, scan_state, TOKEN_NODE_DEF, 1, false);
     }
 }
 
@@ -3581,6 +3755,13 @@ bool tree_sitter_cleancopy_external_scanner_scan(
     scan_state->disambiguated_token = 0;
     lexer->mark_end(lexer);
 
+    if (scanner->pre_sof) {
+        assert(can_parse(scan_state, (TokenType[1]){TOKEN_SOF}, 1));
+        scanner->pre_sof = false;
+        schedule_token(scanner, scan_state, TOKEN_SOF, 0, true);
+        peek_and_schedule_start_of_line(lexer, scanner, scan_state);
+    }
+
     // Once we hit this, we've scheduled **and emitted** all of the meaningful
     // tokens. The only thing we have left to do is emit the _EOD sentinel to
     // conclude the document.
@@ -3636,8 +3817,6 @@ bool tree_sitter_cleancopy_external_scanner_scan(
 
             if (can_parse(scan_state, (TokenType[1]){TOKEN_EOL}, 1)){
                 detect_and_schedule_eol(lexer, scanner, scan_state);}
-            if (can_parse(scan_state, (TokenType[1]){TOKEN_NODE_DEF}, 1)){
-                detect_and_schedule_node_def(lexer, scanner, scan_state);}
 
             // Always prefer trailing whitespace to NIH whitespace and plaintext
             // chars, but also be careful because of mutual consumption problems
@@ -3725,9 +3904,15 @@ unsigned tree_sitter_cleancopy_external_scanner_serialize(
 
     memcpy(
         &buffer[buffer_offset],
-        &scanner->post_eof,
+        &scanner->pre_sof,
         _SCANNER_FIELD_LENGTHS[6]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[6];
+
+    memcpy(
+        &buffer[buffer_offset],
+        &scanner->post_eof,
+        _SCANNER_FIELD_LENGTHS[7]);
+    buffer_offset += _SCANNER_FIELD_LENGTHS[7];
 
     // Context stack -----
     unsigned context_stack_count = scanner->context_stack->size;
@@ -3860,10 +4045,16 @@ void tree_sitter_cleancopy_external_scanner_deserialize(
     buffer_offset += _SCANNER_FIELD_LENGTHS[5];
 
     memcpy(
-        &scanner->post_eof,
+        &scanner->pre_sof,
         &buffer[buffer_offset],
         _SCANNER_FIELD_LENGTHS[6]);
     buffer_offset += _SCANNER_FIELD_LENGTHS[6];
+
+    memcpy(
+        &scanner->post_eof,
+        &buffer[buffer_offset],
+        _SCANNER_FIELD_LENGTHS[7]);
+    buffer_offset += _SCANNER_FIELD_LENGTHS[7];
 
     // Context stack ------
     size_t context_size = sizeof(Context);

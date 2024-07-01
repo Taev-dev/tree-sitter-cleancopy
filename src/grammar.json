@@ -5,6 +5,10 @@
       "type": "SEQ",
       "members": [
         {
+          "type": "SYMBOL",
+          "name": "_ext_sof"
+        },
+        {
           "type": "CHOICE",
           "members": [
             {
@@ -285,6 +289,18 @@
               }
             ]
           }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "fmt_autoclose"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
@@ -363,6 +379,18 @@
               }
             ]
           }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "fmt_autoclose"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         }
       ]
     },
@@ -661,6 +689,67 @@
         {
           "type": "SYMBOL",
           "name": "_eol"
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "fmt_autoclose"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "fmt_autoclose": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_ext_fmt_autoclose"
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "_ext_fmt_unescape"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_ext_fmt_escape_pipe"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_ext_fmt_escape_backslash"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ext_fmt_pre"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ext_fmt_underline"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ext_fmt_strong"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ext_fmt_emphasis"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "ext_fmt_strike"
+              }
+            ]
+          }
         }
       ]
     },
@@ -1382,6 +1471,10 @@
     },
     {
       "type": "SYMBOL",
+      "name": "_ext_sof"
+    },
+    {
+      "type": "SYMBOL",
       "name": "_ext_metadata_key"
     },
     {
@@ -1535,6 +1628,10 @@
     {
       "type": "SYMBOL",
       "name": "_ext_fmt_bracket_close_metadata"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_ext_fmt_autoclose"
     },
     {
       "type": "SYMBOL",

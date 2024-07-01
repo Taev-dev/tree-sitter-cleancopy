@@ -20,6 +20,7 @@ module.exports = grammar({
 
     rules: {
         document: $ => seq(
+            $._ext_sof,
             optional($.version_comment),
             repeat($.empty_line),
             prec.left($._node_segments),
@@ -70,7 +71,8 @@ module.exports = grammar({
                     $._ext_list_hangar,
                     choice($.richtext_line, $.annotation_line),
                     $._eol),
-                $._list))),
+                $._list)),
+            optional($.fmt_autoclose)),
 
         unordered_list_item: $ => seq(
             $._ext_node_continue,
@@ -86,7 +88,8 @@ module.exports = grammar({
                     $._ext_list_hangar,
                     choice($.richtext_line, $.annotation_line),
                     $._eol),
-                $._list))),
+                $._list)),
+            optional($.fmt_autoclose)),
 
         node: $ => seq(
             field('title', $.node_title),
@@ -151,7 +154,20 @@ module.exports = grammar({
                 $.inline_metadata_declaration))),
 
         _richtext_line_incl_ws: $ => seq(
-            $._ext_node_continue, $.richtext_line, $._eol),
+            $._ext_node_continue, $.richtext_line, $._eol,
+            optional($.fmt_autoclose)),
+
+        fmt_autoclose: $ => seq(
+            $._ext_fmt_autoclose,
+            repeat(choice(
+                $._ext_fmt_unescape,
+                $._ext_fmt_escape_pipe,
+                $._ext_fmt_escape_backslash,
+                $.ext_fmt_pre,
+                $.ext_fmt_underline,
+                $.ext_fmt_strong,
+                $.ext_fmt_emphasis,
+                $.ext_fmt_strike))),
 
         _embedding_line_incl_ws: $ => seq(
             $._ext_node_continue, alias($.plaintext, $.embedding_line), $._eol),
@@ -343,6 +359,10 @@ module.exports = grammar({
 
     externals: $ => [
         $._treesitter_error_sentinel,
+        // We use this zero-width-token as a workaround that allows us to
+        // peek ahead at the first line in the file without accidentally
+        // consuming anything
+        $._ext_sof,
         $._ext_metadata_key,
         // Note that we need this to be external so that we can manage the
         // internal state for the scanner -- we may have previously marked
@@ -399,6 +419,7 @@ module.exports = grammar({
         $._ext_fmt_bracket_close_anon_link,
         $._ext_fmt_bracket_close_named_link,
         $._ext_fmt_bracket_close_metadata,
+        $._ext_fmt_autoclose,
         $._ext_richtext_char,
         $._scanner_error_sentinel
     ],

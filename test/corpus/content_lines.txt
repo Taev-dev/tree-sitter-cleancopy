@@ -433,3 +433,70 @@ that spans multiple lines^^ plus some trailing text!
         (plaintext)
         (ext_fmt_emphasis)
         (plaintext)))
+
+
+==================
+Root node fmt-emphasis EoF fmt-unwind
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-emphasis that gets unwound implicitly at EoF
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext))
+    (fmt_autoclose
+        (ext_fmt_emphasis)))
+
+
+==================
+Root node fmt-emphasis empty line fmt-unwind
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-emphasis that gets unwound implicitly...
+
+...by an empty line.
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext))
+    (fmt_autoclose
+        (ext_fmt_emphasis))
+    (empty_line)
+    (richtext_line
+        (plaintext)))
+
+
+==================
+Root node fmt-emphasis empty line fmt-unwind multiple
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-emphasis (and fmt-strong) that gets unwound **implicitly...
+
+...by an empty line.
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext)
+        (ext_fmt_strong)
+        (plaintext))
+    (fmt_autoclose
+        (ext_fmt_strong)
+        (ext_fmt_emphasis))
+    (empty_line)
+    (richtext_line
+        (plaintext)))

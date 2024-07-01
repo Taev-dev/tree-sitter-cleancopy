@@ -26,6 +26,10 @@
           "named": true
         },
         {
+          "type": "fmt_autoclose",
+          "named": true
+        },
+        {
           "type": "node",
           "named": true
         },
@@ -57,6 +61,37 @@
     "type": "empty_line",
     "named": true,
     "fields": {}
+  },
+  {
+    "type": "fmt_autoclose",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "ext_fmt_emphasis",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_pre",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_strike",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_strong",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_underline",
+          "named": true
+        }
+      ]
+    }
   },
   {
     "type": "fmt_bracket_anon_link",
@@ -278,6 +313,10 @@
             "named": true
           },
           {
+            "type": "fmt_autoclose",
+            "named": true
+          },
+          {
             "type": "node",
             "named": true
           },
@@ -454,6 +493,10 @@
           "named": true
         },
         {
+          "type": "fmt_autoclose",
+          "named": true
+        },
+        {
           "type": "ordered_list",
           "named": true
         },
@@ -585,6 +628,10 @@
       "types": [
         {
           "type": "annotation_line",
+          "named": true
+        },
+        {
+          "type": "fmt_autoclose",
           "named": true
         },
         {

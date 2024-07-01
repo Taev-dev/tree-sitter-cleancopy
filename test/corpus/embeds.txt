@@ -3,7 +3,7 @@ Single toplevel node, immediate, title-1, no metadata, embed-1, no empty lines
 ==================
 > Node title
 __embed__: 'some embed type'
-    Embedded content line 1
+    Embedded content line 1 **with formatting to make sure it isn't caught**
 
 ---
 
