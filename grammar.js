@@ -176,6 +176,10 @@ module.exports = grammar({
             $._ext_fmt_escape_pipe,
             $._ext_fmt_escape_backslash,
             $.ext_fmt_pre,
+            $.ext_fmt_underline,
+            $.ext_fmt_strong,
+            $.ext_fmt_emphasis,
+            $.ext_fmt_strike,
             $._fmt_bracket)),
 
         plaintext: $ => repeat1($._plaintext_char),

@@ -502,7 +502,23 @@
       "required": false,
       "types": [
         {
+          "type": "ext_fmt_emphasis",
+          "named": true
+        },
+        {
           "type": "ext_fmt_pre",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_strike",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_strong",
+          "named": true
+        },
+        {
+          "type": "ext_fmt_underline",
           "named": true
         },
         {
@@ -656,7 +672,23 @@
     "named": true
   },
   {
+    "type": "ext_fmt_emphasis",
+    "named": true
+  },
+  {
     "type": "ext_fmt_pre",
+    "named": true
+  },
+  {
+    "type": "ext_fmt_strike",
+    "named": true
+  },
+  {
+    "type": "ext_fmt_strong",
+    "named": true
+  },
+  {
+    "type": "ext_fmt_underline",
     "named": true
   }
 ]

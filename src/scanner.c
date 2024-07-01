@@ -3017,6 +3017,113 @@ static void detect_and_advance_through_fmt_pre(
 }
 
 
+static void detect_and_advance_through_fmt_underline(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_UNDERSCORE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_UNDERLINE;
+
+        if (lexer->lookahead == UNICHR_UNDERSCORE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_UNDERLINE;
+            detection->marker = FMT_UNDERLINE;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_strong(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_ASTERISK) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_STRONG;
+
+        if (lexer->lookahead == UNICHR_ASTERISK) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_STRONG;
+            detection->marker = FMT_STRONG;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_emphasis(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_CARET) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_EMPHASIS;
+
+        if (lexer->lookahead == UNICHR_CARET) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_EMPHASIS;
+            detection->marker = FMT_EMPHASIS;
+        }
+        
+    }
+}
+
+
+static void detect_and_advance_through_fmt_strike(
+        TSLexer *lexer,
+        ScanState *scan_state,
+        FmtDetection *detection
+) {
+    // Note that we always need to be careful about not having detected
+    // something yet, because we've **advanced the lexer** and could
+    // therefore otherwise detect a different formatting marker
+    // immediately following the current one
+    if (detection->detected || scan_state->post_disambiguation) { return; }
+
+    if (lexer->lookahead == UNICHR_TILDE) {
+        advance_lexer(lexer, scan_state, false);
+        scan_state->post_disambiguation = true;
+        scan_state->disambiguated_token = TOKEN_FMT_STRIKE;
+
+        if (lexer->lookahead == UNICHR_TILDE) {
+            advance_lexer(lexer, scan_state, false);
+            detection->detected = true;
+            detection->token = TOKEN_FMT_STRIKE;
+            detection->marker = FMT_STRIKE;
+        }
+    }
+}
+
+
 static void detect_and_advance_through_fmt_bracket_open(
         TSLexer *lexer,
         ScanState *scan_state,
@@ -3209,6 +3316,12 @@ static void detect_and_schedule_formatting(
     detect_and_advance_through_fmt_escape_pipe(lexer, scan_state, detection);
     detect_and_advance_through_fmt_escape_backslash(lexer, scan_state, detection);
     detect_and_advance_through_fmt_pre(lexer, scan_state, detection);
+
+    detect_and_advance_through_fmt_underline(lexer, scan_state, detection);
+    detect_and_advance_through_fmt_strong(lexer, scan_state, detection);
+    detect_and_advance_through_fmt_emphasis(lexer, scan_state, detection);
+    detect_and_advance_through_fmt_strike(lexer, scan_state, detection);
+
     detect_and_advance_through_fmt_bracket_open(lexer, scan_state, detection);
     detect_and_advance_through_fmt_bracket_close_and_something(lexer, scan_state, detection);
     detect_and_advance_through_fmt_bracket_close_named_link(lexer, scan_state, detection);

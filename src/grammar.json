@@ -742,6 +742,22 @@
           },
           {
             "type": "SYMBOL",
+            "name": "ext_fmt_underline"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "ext_fmt_strong"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "ext_fmt_emphasis"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "ext_fmt_strike"
+          },
+          {
+            "type": "SYMBOL",
             "name": "_fmt_bracket"
           }
         ]

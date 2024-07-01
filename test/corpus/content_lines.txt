@@ -319,3 +319,117 @@ an inline fmt-escape-backslash: \\[[\\ -- plus some trailing text!
         (plaintext)
         (plaintext)
         (plaintext)))
+
+
+==================
+Root node fmt-underline
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline __fmt-underline__ plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_underline)
+        (plaintext)
+        (ext_fmt_underline)
+        (plaintext)))
+
+
+==================
+Root node fmt-strong
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline **fmt-strong** plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_strong)
+        (plaintext)
+        (ext_fmt_strong)
+        (plaintext)))
+
+
+==================
+Root node fmt-emphasis
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-emphasis^^ plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext)))
+
+
+==================
+Root node fmt-strike
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ~~fmt-strike~~ plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_strike)
+        (plaintext)
+        (ext_fmt_strike)
+        (plaintext)))
+
+
+==================
+Root node fmt-em-str
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-em w/ **embedded fmt-strong**^^ plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext)
+        (ext_fmt_strong)
+        (plaintext)
+        (ext_fmt_strong)
+        (ext_fmt_emphasis)
+        (plaintext)))
+
+
+==================
+Root node fmt-emphasis multiline
+==================
+This is a simple cleancopy document with plain text in the root node, and
+an inline ^^fmt-emphasis
+that spans multiple lines^^ plus some trailing text!
+---
+
+(document
+    (richtext_line
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext))
+    (richtext_line
+        (plaintext)
+        (ext_fmt_emphasis)
+        (plaintext)))
