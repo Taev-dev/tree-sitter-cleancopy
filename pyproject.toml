@@ -30,3 +30,6 @@ build-frontend = "build"
 
 [tool.pdm.version]
 source = "scm"
+
+[tool.setuptools.dynamic]
+version = {file = ["__VERSION__"]}
