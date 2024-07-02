@@ -27,6 +27,14 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Store git tag as file for setuptools dynamic version (mac/ubuntu)
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: echo "${{github.ref_name}}" >> __VERSION__
+
+      - name: Store git tag as file for setuptools dynamic version (windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: echo "${{github.ref_name}}" | Out-File -FilePath __VERSION__ -Encoding utf8
+
       - name: Update pip
         run: python -m pip install --upgrade pip
 
@@ -47,8 +55,7 @@ jobs:
       - name: Install pdm (windows)
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          (Invoke-WebRequest -Uri https://pdm-project.org/install-pdm.py -UseBasicParsing).Content | \
-          python - --version ${{env.PDM_VERSION}}
+          (Invoke-WebRequest -Uri https://pdm-project.org/install-pdm.py -UseBasicParsing).Content | python - --version ${{env.PDM_VERSION}}
 
       - name: Add pdm to path (windows)
         if: ${{ matrix.os == 'windows-latest' }}
