@@ -4,7 +4,6 @@ on:
   workflow_dispatch:
 
 env:
-  PYTHON_VERSION_FOR_BUILD: 3.12
   PDM_VERSION: "2.16.1"
 
 jobs:
@@ -93,6 +92,7 @@ jobs:
       uses: actions/download-artifact@v4
       with:
         path: dist/
+        merge-multiple: true
     - name: Publish to PyPI (test)
       uses: pypa/gh-action-pypi-publish@release/v1
       with:

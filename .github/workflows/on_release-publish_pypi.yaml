@@ -7,15 +7,15 @@ on:
   release:
     types: [created]
 
+
 env:
   PYTHON_VERSION_FOR_BUILD: 3.12
-  POETRY_VERSION: "1.8.2"
+  PDM_VERSION: "2.16.1"
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
+  build_sdist:
+    runs-on: 'ubuntu-latest'
     timeout-minutes: 7
-
     steps:
       # Root path under $GITHUB_WORKSPACE
       - uses: actions/checkout@v4
@@ -23,45 +23,83 @@ jobs:
       - name: Set up python
         uses: actions/setup-python@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION_FOR_BUILD }}
+          python-version: ${{ matrix.python-version }}
 
-      - name: Set up poetry (ubuntu one-shot)
-        shell: bash
+      - name: Store git tag as file for setuptools dynamic version (mac/ubuntu)
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: echo "${{github.ref_name}}" >> __VERSION__
+
+      - name: Update pip
+        run: python -m pip install --upgrade pip
+
+      - name: Set up pdm (ubuntu)
         run: |
-          curl -sSL https://install.python-poetry.org | \
-          python3 - --version ${{env.POETRY_VERSION}} \
-          && echo "$HOME/.poetry/bin" >> $GITHUB_PATH
+          curl -sSL https://pdm-project.org/install-pdm.py | \
+          python3 - --version ${{env.PDM_VERSION}} \
+          && echo "$HOME/.local/bin" >> $GITHUB_PATH
 
       - name: Build
-        run: |
-          poetry version $(git describe --tags --abbrev=0)
-          poetry build
-          
-      - name: Upload build artifacts
+        run: pdm build -v --no-wheel
+
+      - name: Upload build artifacts (sdist)
+        if: ${{ matrix.os == 'ubuntu-latest' }}
         uses: actions/upload-artifact@v3
         with:
           name: python-package-distributions
-          path: dist/
+          path: dist/*.tar.gz
+
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # macos-13 is an intel runner, macos-14 is apple silicon
+        os: [ubuntu-latest, windows-latest, macos-13, macos-14]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 7
+
+    steps:
+      # Root path under $GITHUB_WORKSPACE
+      - uses: actions/checkout@v4
+
+      - name: Store git tag as file for setuptools dynamic version (mac/ubuntu)
+        if: ${{ matrix.os != 'windows-latest' }}
+        run: echo "${{github.ref_name}}" >> __VERSION__
+
+      - name: Store git tag as file for setuptools dynamic version (windows)
+        if: ${{ matrix.os == 'windows-latest' }}
+        run: echo "${{github.ref_name}}" | Out-File -FilePath __VERSION__ -Encoding utf8
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.19.2
+
+      - name: Upload build artifacts (wheel)
+        uses: actions/upload-artifact@v4
+        with:
+          name: cibw-wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
 
   publish:
     # Only publish if current commit is tagged
     if: startsWith(github.ref, 'refs/tags/')
     needs:
-    - build
+    - build_sdist
+    - build_wheels
     runs-on: ubuntu-latest
     environment:
       name: pypi
-      url: https://pypi.org/p/tevec
+      url: https://pypi.org/p/tree-sitter-cleancopy
     permissions:
       id-token: write # Mandatory for trusted publishing
 
     steps:
     - name: Download build artifacts
-      uses: actions/download-artifact@v3
+      uses: actions/download-artifact@v4
       with:
-        name: python-package-distributions
         path: dist/
-    - name: Publish to PyPI (test)
+        merge-multiple: true
+    - name: Publish to PyPI (prod)
       uses: pypa/gh-action-pypi-publish@release/v1
 
   # TODO: add sigstore step
