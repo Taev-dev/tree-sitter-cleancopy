@@ -40,9 +40,9 @@ jobs:
       - name: Set up pdm (mac)
         if: ${{ matrix.os == 'macos-latest' }}
         run: |
-          curl -sSL https://pdm-project.org/install-pdm.py | \
-          python3 - --version ${{env.PDM_VERSION}} \
-          && echo "$HOME/Library/Python/${{matrix.python-version}}/bin" >> $GITHUB_PATH
+          (curl -sSL https://pdm-project.org/install-pdm.py | \
+          python3 - --version ${{env.PDM_VERSION}}) \
+          -and (echo "$HOME/Library/Python/${{matrix.python-version}}/bin" >> $GITHUB_PATH)
 
       - name: Set up pdm (windows)
         if: ${{ matrix.os == 'windows-latest' }}
