@@ -3778,7 +3778,7 @@ bool tree_sitter_cleancopy_external_scanner_scan(
         // a normal line, we need to handle it here.
         if (lexer->eof(lexer)) {
             schedule_token(scanner, scan_state, TOKEN_EOL, 0, true);
-            handle_eof_after_nonempty_line(lexer, scanner, scan_state, false);
+            handle_eof_after_nonempty_line(lexer, scanner, scan_state);
 
         // But do note that if we're at the EoF, all other tokens are invalid, and
         // should be skipped (to help avoid errors and weird states)
