@@ -63,7 +63,23 @@ jobs:
 
       - name: Build
         run: pdm build -v
-          
+
+      - name: "Auditwheel (manylinux1 -- ubuntu only): install auditwheel"
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: pip3 install auditwheel
+
+      - name: "Auditwheel (manylinux1 -- ubuntu only): repair wheel"
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          find dist/ -name "*.whl" -print0 | \
+          xargs -0 -n1 auditwheel repair
+
+      - name: "Auditwheel (manylinux1 -- ubuntu only): remove old wheel"
+        if: ${{ matrix.os == 'ubuntu-latest' }}
+        run: |
+          find dist/ -name "*linux_x86_64.whl" -print0 | \
+          xargs -0 rm
+
       - name: Upload build artifacts (wheel)
         uses: actions/upload-artifact@v3
         with:
