@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "tree-sitter-cleancopy"
 description = "Cleancopy grammar for tree-sitter"
-version = "0.0.1"
+dynamic = ["version"]
 keywords = ["incremental", "parsing", "tree-sitter", "cleancopy"]
 classifiers = [
   "Intended Audience :: Developers",
@@ -27,3 +27,6 @@ core = ["tree-sitter~=0.21"]
 [tool.cibuildwheel]
 build = "cp38-*"
 build-frontend = "build"
+
+[tool.pdm.version]
+source = "scm"

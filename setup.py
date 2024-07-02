@@ -36,7 +36,9 @@ setup(
             sources=[
                 "bindings/python/tree_sitter_cleancopy/binding.c",
                 "src/parser.c",
-                # NOTE: if your language uses an external scanner, add it here.
+                # "src/cleancopy_chars.h",
+                # "src/cleancopy_utils.h",
+                "src/scanner.c"
             ],
             extra_compile_args=[
                 "-std=c11",
