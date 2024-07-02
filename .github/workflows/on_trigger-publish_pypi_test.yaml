@@ -28,7 +28,6 @@ jobs:
         run: python -m pip install --upgrade pip
 
       - name: Set up pdm (ubuntu)
-        if: ${{ matrix.os == 'ubuntu-latest' }}
         run: |
           curl -sSL https://pdm-project.org/install-pdm.py | \
           python3 - --version ${{env.PDM_VERSION}} \
