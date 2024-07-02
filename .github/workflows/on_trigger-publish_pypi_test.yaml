@@ -47,9 +47,9 @@ jobs:
       - name: Set up pdm (windows)
         if: ${{ matrix.os == 'windows-latest' }}
         run: |
-          (Invoke-WebRequest -Uri https://pdm-project.org/install-pdm.py -UseBasicParsing).Content | \
-          python - --version ${{env.PDM_VERSION}} \
-          && echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          ((Invoke-WebRequest -Uri https://pdm-project.org/install-pdm.py -UseBasicParsing).Content | \
+          python - --version ${{env.PDM_VERSION}}) \
+          -and (echo "$env:APPDATA\Python\Scripts" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append)
 
       - name: Build
         run: pdm build
