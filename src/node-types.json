@@ -37,7 +37,17 @@
           }
         ]
       },
-      "segments": {
+      "node": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "node",
+            "named": true
+          }
+        ]
+      },
+      "root_node": {
         "multiple": true,
         "required": true,
         "types": [
@@ -422,6 +432,16 @@
         "types": [
           {
             "type": "node_metadata",
+            "named": true
+          }
+        ]
+      },
+      "node": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "node",
             "named": true
           }
         ]

@@ -23,7 +23,7 @@ module.exports = grammar({
             $._ext_sof,
             optional($.version_comment),
             repeat($.empty_line),
-            field('segments', prec.left($._node_segments)),
+            field('root_node', prec.left($._node_segments)),
             $._ext_eof),
         // Sometimes we have situations where some optional stuff results in
         // other nih whitespace being next to the EoL. One example is if you
@@ -39,10 +39,10 @@ module.exports = grammar({
         _node_segments: $ => seq(
             choice(
                 $._annotation_line_incl_ws,
-                $._richtext_line_incl_ws, $._list, $.node),
+                $._richtext_line_incl_ws, $._list, field('node', $.node)),
             repeat(choice(
                 $.empty_line, $._annotation_line_incl_ws,
-                $._richtext_line_incl_ws, $._list, $.node))),
+                $._richtext_line_incl_ws, $._list, field('node', $.node)))),
 
         _embedding_segments: $ => seq(
             $._embedding_line_incl_ws,

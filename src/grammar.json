@@ -29,7 +29,7 @@
         },
         {
           "type": "FIELD",
-          "name": "segments",
+          "name": "root_node",
           "content": {
             "type": "PREC_LEFT",
             "value": 0,
@@ -110,8 +110,12 @@
               "name": "_list"
             },
             {
-              "type": "SYMBOL",
-              "name": "node"
+              "type": "FIELD",
+              "name": "node",
+              "content": {
+                "type": "SYMBOL",
+                "name": "node"
+              }
             }
           ]
         },
@@ -137,8 +141,12 @@
                 "name": "_list"
               },
               {
-                "type": "SYMBOL",
-                "name": "node"
+                "type": "FIELD",
+                "name": "node",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "node"
+                }
               }
             ]
           }
