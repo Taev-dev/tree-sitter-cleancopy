@@ -23,7 +23,7 @@ module.exports = grammar({
             $._ext_sof,
             optional($.version_comment),
             repeat($.empty_line),
-            prec.left($._node_segments),
+            field('segments', prec.left($._node_segments)),
             $._ext_eof),
         // Sometimes we have situations where some optional stuff results in
         // other nih whitespace being next to the EoL. One example is if you
@@ -53,8 +53,8 @@ module.exports = grammar({
             choice($.ordered_list, $.unordered_list),
             $._ext_list_end),
 
-        ordered_list: $ => repeat1($.ordered_list_item),
-        unordered_list: $ => repeat1($.unordered_list_item),
+        ordered_list: $ => field('list', repeat1($.ordered_list_item)),
+        unordered_list: $ => field('list', repeat1($.unordered_list_item)),
 
         ordered_list_item: $ => seq(
             $._ext_node_continue,
@@ -62,34 +62,38 @@ module.exports = grammar({
             field('index', $._ext_ol_index),
             $._ext_ol_marker,
             repeat($._ext_nih_whitespace),
-            $.richtext_line,
+            field('content', $.richtext_line),
             $._eol,
             repeat(choice(
                 seq(
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    choice($.richtext_line, $.annotation_line),
+                    choice(
+                        field('content', $.richtext_line),
+                        field('annotation', $.annotation_line)),
                     $._eol),
                 $._list)),
-            optional($.fmt_autoclose)),
+            optional(field('content', $.fmt_autoclose))),
 
         unordered_list_item: $ => seq(
             $._ext_node_continue,
             $._ext_list_continue,
             $._ext_ul_marker,
             repeat($._ext_nih_whitespace),
-            $.richtext_line,
+            field('content', $.richtext_line),
             $._eol,
             repeat(choice(
                 seq(
                     $._ext_node_continue,
                     $._ext_list_continue,
                     $._ext_list_hangar,
-                    choice($.richtext_line, $.annotation_line),
+                    choice(
+                        field('content', $.richtext_line),
+                        field('annotation', $.annotation_line)),
                     $._eol),
                 $._list)),
-            optional($.fmt_autoclose)),
+            optional(field('content', $.fmt_autoclose))),
 
         node: $ => seq(
             field('title', $.node_title),
@@ -111,16 +115,18 @@ module.exports = grammar({
                     $._eol))),
 
         node_title: $ => seq(
-            $.node_title_line,
-            repeat(choice($.empty_line, $.node_title_line))),
+            field('line', $.node_title_line),
+            repeat(choice($.empty_line, field('line', $.node_title_line)))),
 
         // Word to the wise: don't try and enforce only-1-ID-line here.
         // You'll regret it! Do it when converting the CST -> AST.
         node_metadata: $ => seq(
-            choice($._annotation_line_incl_ws, $.node_metadata_declaration_line),
+            choice(
+                $._annotation_line_incl_ws,
+                field('declaration', $.node_metadata_declaration_line)),
             repeat(choice(
                 $.empty_line,
-                $.node_metadata_declaration_line,
+                field('declaration', $.node_metadata_declaration_line),
                 $._annotation_line_incl_ws))),
 
         // Note that the node title marker is ambiguous with the node line
@@ -129,33 +135,33 @@ module.exports = grammar({
             $._ext_node_continue,
             $._ext_node_def_symbol,
             repeat($._ext_nih_whitespace),
-            optional($.richtext_line),
+            field('content', optional($.richtext_line)),
             $._eol),
 
         node_metadata_declaration_line: $ => seq(
             $._ext_node_continue,
-            $.node_metadata_key,
+            field('key', $.node_metadata_key),
             $._SYMBOL_METADATA_ASSIGNMENT,
             repeat($._ext_nih_whitespace),
-            $.metadata_value,
+            field('value', $.metadata_value),
             $._eol),
 
         inline_metadata_declaration: $ => seq(
-            $.node_metadata_key,
+            field('key', $.node_metadata_key),
             $._SYMBOL_METADATA_ASSIGNMENT,
             repeat($._ext_nih_whitespace),
-            $.metadata_value),
+            field('value', $.metadata_value)),
 
         inline_metadata: $ => seq(
-            $.inline_metadata_declaration,
+            field('declaration', $.inline_metadata_declaration),
             repeat(seq(
                 $._SYMBOL_METADATA_SEPARATOR,
                 repeat($._ext_nih_whitespace),
-                $.inline_metadata_declaration))),
+                field('declaration', $.inline_metadata_declaration)))),
 
         _richtext_line_incl_ws: $ => seq(
-            $._ext_node_continue, $.richtext_line, $._eol,
-            optional($.fmt_autoclose)),
+            $._ext_node_continue, field('content', $.richtext_line), $._eol,
+            optional(field('content', $.fmt_autoclose))),
 
         fmt_autoclose: $ => seq(
             $._ext_fmt_autoclose,
@@ -172,7 +178,7 @@ module.exports = grammar({
         _embedding_line_incl_ws: $ => seq(
             $._ext_node_continue, alias($.plaintext, $.embedding_line), $._eol),
         _annotation_line_incl_ws: $ => seq(
-            $._ext_node_continue, $.annotation_line, $._eol),
+            $._ext_node_continue, field('annotation', $.annotation_line), $._eol),
 
         // Note: this gets used in both content lines and in titles, however,
         // it **does not** include lists!
@@ -208,7 +214,7 @@ module.exports = grammar({
         annotation_line: $ => seq(
             $._ext_annotation_marker,
             repeat($._ext_nih_whitespace),
-            field('comment', repeat($._plaintext_char))),
+            field('line', repeat($._plaintext_char))),
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing
@@ -325,7 +331,7 @@ module.exports = grammar({
         _DECIMAL_SEPARATOR: $ => '.',
 
 
-        _LITERAL_VERSION_COMMENT: $ => '<<<cleancopy>>>',
+        _LITERAL_VERSION_COMMENT: $ => '## cleancopy',
 
         _SYMBOL_METADATA_ASSIGNMENT: $ => ':',
         _SYMBOL_METADATA_SEPARATOR: $ => ';',
@@ -335,25 +341,25 @@ module.exports = grammar({
         _fmt_bracket: $ => seq(
             $._ext_fmt_bracket_open,
             choice(
-                prec.dynamic(3, $.fmt_bracket_anon_link),
-                prec.dynamic(2, $.fmt_bracket_named_link),
-                prec.dynamic(1, $.fmt_bracket_metadata))),
+                prec.dynamic(3, field('fmt_bracket', $.fmt_bracket_anon_link)),
+                prec.dynamic(2, field('fmt_bracket', $.fmt_bracket_named_link)),
+                prec.dynamic(1, field('fmt_bracket', $.fmt_bracket_metadata)))),
 
         fmt_bracket_anon_link: $ => seq(
             // $.richtext_line,
             $._ext_fmt_bracket_flag_anon_link,
-            choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            field('target', choice($.mention, $.tag, $.variable, $.ref, $.uri)),
             $._ext_fmt_bracket_close_anon_link),
         fmt_bracket_named_link: $ => seq(
-            $.richtext_line,
+            field('content', $.richtext_line),
             $._ext_fmt_bracket_delimit_named_link,
             // $.richtext_line,
-            choice($.mention, $.tag, $.variable, $.ref, $.uri),
+            field('target', choice($.mention, $.tag, $.variable, $.ref, $.uri)),
             $._ext_fmt_bracket_close_named_link),
         fmt_bracket_metadata: $ => seq(
-            $.richtext_line,
+            field('content', $.richtext_line),
             $._ext_fmt_bracket_delimit_metadata,
-            $.inline_metadata,
+            field('metadata', $.inline_metadata),
             $._ext_fmt_bracket_close_metadata)
     },
 

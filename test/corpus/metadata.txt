@@ -259,7 +259,7 @@ foo: #hashtag
 Metadata, generic identifier key, variable value
 ==================
 > Node title
-foo: $variable
+foo: %variable
 <
 
 ---

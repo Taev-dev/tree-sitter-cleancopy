@@ -56,6 +56,7 @@ const int32_t UNICHR_AT = '@';
 const int32_t UNICHR_HASH = '#';  // Note: also annotation lines
 const int32_t UNICHR_DOLLAR = '$';
 const int32_t UNICHR_AMPERSAND = '&';
+const int32_t UNICHR_PERCENT = '%';
 
 // Lists
 const int32_t UNICHR_DOT = '.';

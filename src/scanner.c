@@ -2936,7 +2936,7 @@ static void detect_and_schedule_metadata_valtype_marker(
     } else if (lexer->lookahead == UNICHR_HASH) {
         schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_TAG, 1, false);
         
-    } else if (lexer->lookahead == UNICHR_DOLLAR) {
+    } else if (lexer->lookahead == UNICHR_PERCENT) {
         schedule_token(scanner, scan_state, TOKEN_MARKER_VALTYPE_VARIABLE, 1, false);
         
     } else if (lexer->lookahead == UNICHR_AMPERSAND) {
