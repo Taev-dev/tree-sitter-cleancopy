@@ -7,11 +7,12 @@ nothing else.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (empty_line))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (empty_line)))
 
 ==================
 Root node content w/ trailing (visibly-empty only) emptyline
@@ -22,11 +23,12 @@ nothing else. Like above, but the empty line at the end has whitespace in it.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (empty_line))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (empty_line)))
 
 
 ==================
@@ -37,10 +39,11 @@ nothing else.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))))
 
 
 ==================
@@ -51,12 +54,13 @@ an inline anonymous link: [[https://www.example.com]]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_anon_link
-            (uri))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_anon_link
+                (uri)))))
 
 
 ==================
@@ -67,12 +71,13 @@ an inline anonymous link: [[@foo]]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_anon_link
-            (mention))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_anon_link
+                (mention)))))
 
 
 ==================
@@ -83,12 +88,13 @@ an inline anonymous link: [[#foo]]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_anon_link
-            (tag))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_anon_link
+                (tag)))))
 
 
 ==================
@@ -99,14 +105,15 @@ an inline named link: [[foo](https://www.example.com)]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_named_link
-            (richtext_line
-                (plaintext))
-            (uri))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_named_link
+                (richtext_line
+                    (plaintext))
+                (uri)))))
 
 
 ==================
@@ -117,14 +124,15 @@ an inline named link: [[foo](@bar)]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_named_link
-            (richtext_line
-                (plaintext))
-            (mention))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_named_link
+                (richtext_line
+                    (plaintext))
+                (mention)))))
 
 
 ==================
@@ -135,14 +143,15 @@ an inline named link: [[foo](#bar)]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_named_link
-            (richtext_line
-                (plaintext))
-            (tag))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_named_link
+                (richtext_line
+                    (plaintext))
+                (tag)))))
 
 
 ==================
@@ -153,18 +162,19 @@ an inline metadata bracket: [[foo]<bar: 'bar'>]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_metadata
-            (richtext_line
-                (plaintext))
-            (inline_metadata
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (STRING1)))))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_metadata
+                (richtext_line
+                    (plaintext))
+                (inline_metadata
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (STRING1))))))))
 
 
 ==================
@@ -175,26 +185,27 @@ an inline metadata bracket: [[foo]<bar: true; baz: false; zab: false>]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_metadata
-            (richtext_line
-                (plaintext))
-            (inline_metadata
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (TRUE)))
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (FALSE)))
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (FALSE)))))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_metadata
+                (richtext_line
+                    (plaintext))
+                (inline_metadata
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (TRUE)))
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (FALSE)))
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (FALSE))))))))
 
 
 ==================
@@ -205,22 +216,23 @@ an inline metadata bracket: [[foo]<bar: @bar; baz: @baz>]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_metadata
-            (richtext_line
-                (plaintext))
-            (inline_metadata
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (mention)))
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (mention)))))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_metadata
+                (richtext_line
+                    (plaintext))
+                (inline_metadata
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (mention)))
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (mention))))))))
 
 
 ==================
@@ -231,26 +243,27 @@ an inline metadata bracket: [[foo [[oof]<rab: 'rab'>]]<bar: 'bar'>]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_metadata
-            (richtext_line
-                (plaintext)
-                (fmt_bracket_metadata
-                    (richtext_line
-                        (plaintext))
-                    (inline_metadata
-                        (inline_metadata_declaration
-                            (node_metadata_key)
-                            (metadata_value
-                                (STRING1))))))
-            (inline_metadata
-                (inline_metadata_declaration
-                    (node_metadata_key)
-                    (metadata_value
-                        (STRING1)))))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_metadata
+                (richtext_line
+                    (plaintext)
+                    (fmt_bracket_metadata
+                        (richtext_line
+                            (plaintext))
+                        (inline_metadata
+                            (inline_metadata_declaration
+                                (node_metadata_key)
+                                (metadata_value
+                                    (STRING1))))))
+                (inline_metadata
+                    (inline_metadata_declaration
+                        (node_metadata_key)
+                        (metadata_value
+                            (STRING1))))))))
 
 
 ==================
@@ -261,13 +274,14 @@ an inline fmt-pre: ``[[``
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_pre)
-        (plaintext)
-        (ext_fmt_pre)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_pre)
+            (plaintext)
+            (ext_fmt_pre))))
 
 
 ==================
@@ -278,16 +292,17 @@ an inline fmt-pre within a named link: [[``foo``](https://example.com)]
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (fmt_bracket_named_link
-            (richtext_line
-                (ext_fmt_pre)
-                (plaintext)
-                (ext_fmt_pre))
-            (uri))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (fmt_bracket_named_link
+                (richtext_line
+                    (ext_fmt_pre)
+                    (plaintext)
+                    (ext_fmt_pre))
+                (uri)))))
 
 
 ==================
@@ -298,11 +313,12 @@ an inline fmt-escape-pipe: ||[[||
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (plaintext)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (plaintext))))
 
 
 ==================
@@ -313,12 +329,13 @@ an inline fmt-escape-backslash: \\[[\\ -- plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (plaintext)
-        (plaintext)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (plaintext)
+            (plaintext))))
 
 
 ==================
@@ -329,14 +346,15 @@ an inline __fmt-underline__ plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_underline)
-        (plaintext)
-        (ext_fmt_underline)
-        (plaintext)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_underline)
+            (plaintext)
+            (ext_fmt_underline)
+            (plaintext))))
 
 
 ==================
@@ -347,15 +365,16 @@ an inline **fmt-strong** plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_strong)
-        (plaintext)
-        (ext_fmt_strong)
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_strong)
+            (plaintext)
+            (ext_fmt_strong)
+            (plaintext)))
+)
 
 ==================
 Root node fmt-emphasis
@@ -365,15 +384,16 @@ an inline ^^fmt-emphasis^^ plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext)))
+)
 
 ==================
 Root node fmt-strike
@@ -383,15 +403,16 @@ an inline ~~fmt-strike~~ plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_strike)
-        (plaintext)
-        (ext_fmt_strike)
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_strike)
+            (plaintext)
+            (ext_fmt_strike)
+            (plaintext)))
+)
 
 ==================
 Root node fmt-em-str
@@ -401,18 +422,19 @@ an inline ^^fmt-em w/ **embedded fmt-strong**^^ plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext)
-        (ext_fmt_strong)
-        (plaintext)
-        (ext_fmt_strong)
-        (ext_fmt_emphasis)
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext)
+            (ext_fmt_strong)
+            (plaintext)
+            (ext_fmt_strong)
+            (ext_fmt_emphasis)
+            (plaintext)))
+)
 
 ==================
 Root node fmt-emphasis multiline
@@ -423,17 +445,18 @@ that spans multiple lines^^ plus some trailing text!
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext)))
+)
 
 ==================
 Root node fmt-emphasis EoF fmt-unwind
@@ -443,15 +466,16 @@ an inline ^^fmt-emphasis that gets unwound implicitly at EoF
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext))
-    (fmt_autoclose
-        (ext_fmt_emphasis)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_emphasis)))
+)
 
 ==================
 Root node fmt-emphasis empty line fmt-unwind
@@ -463,18 +487,19 @@ an inline ^^fmt-emphasis that gets unwound implicitly...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext))
-    (fmt_autoclose
-        (ext_fmt_emphasis))
-    (empty_line)
-    (richtext_line
-        (plaintext)))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_emphasis))
+        (empty_line)
+        (richtext_line
+            (plaintext)))
+)
 
 ==================
 Root node fmt-emphasis empty line fmt-unwind multiple
@@ -486,17 +511,19 @@ an inline ^^fmt-emphasis (and fmt-strong) that gets unwound **implicitly...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext)
-        (ext_fmt_emphasis)
-        (plaintext)
-        (ext_fmt_strong)
-        (plaintext))
-    (fmt_autoclose
-        (ext_fmt_strong)
-        (ext_fmt_emphasis))
-    (empty_line)
-    (richtext_line
-        (plaintext)))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext)
+            (ext_fmt_emphasis)
+            (plaintext)
+            (ext_fmt_strong)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_strong)
+            (ext_fmt_emphasis))
+        (empty_line)
+        (richtext_line
+            (plaintext)))
+)

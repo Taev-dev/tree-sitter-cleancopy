@@ -7,15 +7,17 @@ Single toplevel node, immediate, title-1, no metadata
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
                     (plaintext))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
-
+        (empty_line))
+)
 
 ==================
 Single toplevel node, immediate, title-2, no metadata
@@ -27,18 +29,20 @@ Single toplevel node, immediate, title-2, no metadata
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext)))
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext)))
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
                     (plaintext))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
-
+        (empty_line))
+)
 
 ==================
 Single toplevel node, delayed, title-1, no metadata
@@ -51,18 +55,20 @@ Preamble content
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (empty_line)
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (richtext_line
+            (plaintext))
+        (empty_line)
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
                     (plaintext))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
-
+        (empty_line))
+)
 
 ==================
 Single toplevel node, delayed, title-1, no metadata, no empty lines
@@ -74,18 +80,20 @@ Trailing content
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (richtext_line
+            (plaintext))
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
                     (plaintext))))
         (richtext_line
             (plaintext)))
-    (richtext_line
-        (plaintext)))
-
+)
 
 ==================
 Single toplevel node, delayed, no title, no metadata
@@ -98,16 +106,18 @@ Preamble content
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (empty_line)
-    (node
-        (node_title
-            (node_title_line))
+    (node_content
         (richtext_line
-            (plaintext)))
-    (empty_line))
-
+            (plaintext))
+        (empty_line)
+        (node
+            (node_title
+                (node_title_line))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Single toplevel node, delayed, title-1, no metadata, empty
@@ -120,6 +130,7 @@ Preamble content
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (empty_line)
@@ -129,7 +140,7 @@ Preamble content
                 (richtext_line
                     (plaintext)))))
     (empty_line))
-
+)
 
 ==================
 Single toplevel node, delayed, no title, no metadata, empty
@@ -142,6 +153,7 @@ Preamble content
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (empty_line)
@@ -149,7 +161,7 @@ Preamble content
         (node_title
             (node_title_line)))
     (empty_line))
-
+)
 
 ==================
 Nested nodes, immediate, title-1, no metadata, unwrapping exit
@@ -172,40 +184,44 @@ Root trailing content
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (richtext_line
-            (plaintext))
-        (empty_line)
+    (node_content
         (node
             (node_title
                 (node_title_line
                     (richtext_line
                         (plaintext))))
-            (richtext_line
-                (plaintext))
-            (empty_line)
-            (node
-                (node_title
-                    (node_title_line
+            (node_content
+                (richtext_line
+                    (plaintext))
+                (empty_line)
+                (node
+                    (node_title
+                        (node_title_line
+                            (richtext_line
+                                (plaintext))))
+                    (node_content
+                        (richtext_line
+                            (plaintext))
+                        (empty_line)
+                        (node
+                            (node_title
+                                (node_title_line
+                                    (richtext_line
+                                        (plaintext))))
+                            (node_content
+                                (richtext_line
+                                    (plaintext))))
+                        (empty_line)
                         (richtext_line
                             (plaintext))))
+                (empty_line)
                 (richtext_line
-                    (plaintext)))
-            (empty_line)
-            (richtext_line
-                (plaintext)))
+                    (plaintext))))
         (empty_line)
         (richtext_line
-            (plaintext)))
-    (empty_line)
-    (richtext_line
-        (plaintext))
-    (empty_line))
-
+            (plaintext))
+        (empty_line))
+)
 
 ==================
 Nested nodes, immediate, title-1, no metadata, immediate exit
@@ -222,31 +238,35 @@ Nested nodes, immediate, title-1, no metadata, immediate exit
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (richtext_line
-            (plaintext))
-        (empty_line)
+    (node_content
         (node
             (node_title
                 (node_title_line
                     (richtext_line
                         (plaintext))))
-            (richtext_line
-                (plaintext))
-            (empty_line)
-            (node
-                (node_title
-                    (node_title_line
-                        (richtext_line
-                            (plaintext))))
+            (node_content
                 (richtext_line
-                    (plaintext)))))
-    (empty_line))
-
+                    (plaintext))
+                (empty_line)
+                (node
+                    (node_title
+                        (node_title_line
+                            (richtext_line
+                                (plaintext))))
+                    (node_content
+                        (richtext_line
+                            (plaintext))
+                        (empty_line)
+                        (node
+                            (node_title
+                                (node_title_line
+                                    (richtext_line
+                                        (plaintext))))
+                            (node_content
+                                (richtext_line
+                                    (plaintext))))))))
+        (empty_line))
+)
 
 ==================
 Single toplevel node, fmt-unwind, trailing empty line
@@ -257,19 +277,21 @@ Single toplevel node, fmt-unwind, trailing empty line
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
-                    (plaintext))))
-        (richtext_line
-            (plaintext)
-            (ext_fmt_emphasis)
-            (plaintext))
-        (fmt_autoclose
-            (ext_fmt_emphasis)))
-    (empty_line))
-
+                    (plaintext)
+                    (ext_fmt_emphasis)
+                    (plaintext))
+                (fmt_autoclose
+                    (ext_fmt_emphasis))))
+        (empty_line))
+)
 
 ==================
 Single toplevel node, fmt-unwind, no trailing empty line
@@ -279,18 +301,20 @@ Single toplevel node, fmt-unwind, no trailing empty line
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
-                    (plaintext))))
-        (richtext_line
-            (plaintext)
-            (ext_fmt_emphasis)
-            (plaintext))
-        (fmt_autoclose
-            (ext_fmt_emphasis))))
-
+                    (plaintext)
+                    (ext_fmt_emphasis)
+                    (plaintext))
+                (fmt_autoclose
+                    (ext_fmt_emphasis)))))
+)
 
 ==================
 Single toplevel node, fmt-unwind via node itself
@@ -302,21 +326,23 @@ Preamble content with **fmt-strong
 ---
 
 (document
-    (richtext_line
-        (plaintext)
-        (ext_fmt_strong)
-        (plaintext))
-    (fmt_autoclose
-        (ext_fmt_strong))
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (richtext_line
+            (plaintext)
+            (ext_fmt_strong)
+            (plaintext))
+        (fmt_autoclose
+            (ext_fmt_strong))
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
                 (richtext_line
                     (plaintext))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
-
+        (empty_line))
+)
 
 ==================
 Single toplevel node, fmt-em in title
@@ -327,17 +353,19 @@ Single toplevel node, fmt-em in title
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (ext_fmt_emphasis)
+                        (plaintext)
+                        (ext_fmt_emphasis))))
+            (node_content
                 (richtext_line
-                    (ext_fmt_emphasis)
-                    (plaintext)
-                    (ext_fmt_emphasis))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
-
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Single toplevel node, link in title
@@ -348,15 +376,18 @@ Single toplevel node, link in title
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext)
+                        (fmt_bracket_named_link
+                            (richtext_line
+                                (plaintext))
+                            (tag)))))
+            (node_content
                 (richtext_line
-                    (plaintext)
-                    (fmt_bracket_named_link
-                        (richtext_line
-                            (plaintext))
-                        (tag)))))
-        (richtext_line
-            (plaintext)))
-    (empty_line))
+                    (plaintext))))
+        (empty_line))
+)

@@ -9,6 +9,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -22,7 +23,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-1 singles w/ EoF emptyline and balanced formatting
@@ -35,6 +36,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -51,7 +53,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-1 singles w/ EoF emptyline and autoclosed formatting
@@ -64,6 +66,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -81,7 +84,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root OL-1 singles w/ EoF emptyline
@@ -94,20 +97,24 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-1 singles w/ interstitial emptyline and EoF emptyline
@@ -124,6 +131,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -146,7 +154,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-3 singles w/ no-unwrap EoF emptyline
@@ -160,6 +168,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -178,7 +187,7 @@ Here we have a single content row followed by:
                             (richtext_line
                                 (plaintext))))))))
     (empty_line))
-
+)
 
 ==================
 Root OL-3 singles w/ no-unwrap EoF emptyline
@@ -192,25 +201,30 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))
             (ordered_list
                 (ordered_list_item
+                    (ext_ol_index)
                     (richtext_line
                         (plaintext))
                     (ordered_list
                         (ordered_list_item
+                            (ext_ol_index)
                             (richtext_line
                                 (plaintext))))))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-3 singles w/ unwrapping, EoF emptyline
@@ -226,6 +240,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -250,7 +265,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root OL-3 singles w/ unwrapping, EoF emptyline
@@ -266,31 +281,38 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))
             (ordered_list
                 (ordered_list_item
+                    (ext_ol_index)
                     (richtext_line
                         (plaintext))
                     (ordered_list
                         (ordered_list_item
+                            (ext_ol_index)
                             (richtext_line
                                 (plaintext)))))
                 (ordered_list_item
+                    (ext_ol_index)
                     (richtext_line
                         (plaintext)))))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root OL-to-UNOL-1 singles w/ no-unwrap EoF emptyline
@@ -304,10 +326,12 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))))
     (unordered_list
@@ -319,10 +343,11 @@ Here we have a single content row followed by:
                 (plaintext))))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-to-OL-1 singles w/ no-unwrap EoF emptyline
@@ -336,6 +361,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -344,9 +370,11 @@ Here we have a single content row followed by:
                 (plaintext))))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))))
     (unordered_list
@@ -354,7 +382,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root UNOL-1 multis w/ no-unwrap EoF emptyline
@@ -369,6 +397,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (unordered_list
@@ -386,7 +415,7 @@ Here we have a single content row followed by:
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Root OL-1 multis w/ no-unwrap EoF emptyline
@@ -401,24 +430,28 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (ordered_list
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))
             (richtext_line
                 (plaintext)))
         (ordered_list_item
+            (ext_ol_index)
             (richtext_line
                 (plaintext))
             (richtext_line
                 (plaintext))))
     (empty_line))
-
+)
 
 ==================
 Node-1 UNOL-1 singles w/ no-unwrap EoF emptyline
@@ -432,6 +465,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (node
@@ -439,18 +473,19 @@ Here we have a single content row followed by:
             (node_title_line
                 (richtext_line
                     (plaintext))))
-        (unordered_list
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))))
+        (node_content
+            (unordered_list
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))))))
     (empty_line))
-
+)
 
 ==================
 Node-1 UNOL-1 multis w/ no-unwrap EoF emptyline
@@ -466,6 +501,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (node
@@ -473,22 +509,23 @@ Here we have a single content row followed by:
             (node_title_line
                 (richtext_line
                     (plaintext))))
-        (unordered_list
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (richtext_line
-                    (plaintext)))))
+        (node_content
+            (unordered_list
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (richtext_line
+                        (plaintext))))))
     (empty_line))
-
+)
 
 ==================
 Node-1 UNOL-2 singles w/ no-unwrap EoF emptyline
@@ -502,6 +539,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (node
@@ -509,19 +547,20 @@ Here we have a single content row followed by:
             (node_title_line
                 (richtext_line
                     (plaintext))))
-        (unordered_list
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (unordered_list
-                    (unordered_list_item
-                        (richtext_line
-                            (plaintext)))))))
+        (node_content
+            (unordered_list
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (unordered_list
+                        (unordered_list_item
+                            (richtext_line
+                                (plaintext))))))))
     (empty_line))
-
+)
 
 ==================
 Node-1 UNOL-2 multis w/ no-unwrap EoF emptyline
@@ -537,6 +576,7 @@ Here we have a single content row followed by:
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (node
@@ -544,23 +584,24 @@ Here we have a single content row followed by:
             (node_title_line
                 (richtext_line
                     (plaintext))))
-        (unordered_list
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (richtext_line
-                    (plaintext))
-                (unordered_list
-                    (unordered_list_item
-                        (richtext_line
-                            (plaintext))
-                        (richtext_line
-                            (plaintext)))))))
+        (node_content
+            (unordered_list
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (richtext_line
+                        (plaintext))
+                    (unordered_list
+                        (unordered_list_item
+                            (richtext_line
+                                (plaintext))
+                            (richtext_line
+                                (plaintext))))))))
     (empty_line))
-
+)
 
 ==================
 Node-1 UNOL-2 multis w/ unwrapping EoF emptyline
@@ -580,6 +621,7 @@ tada!
 ---
 
 (document
+    (node_content
     (richtext_line
         (plaintext))
     (node
@@ -587,27 +629,29 @@ tada!
             (node_title_line
                 (richtext_line
                     (plaintext))))
-        (unordered_list
-            (unordered_list_item
-                (richtext_line
-                    (plaintext)))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (richtext_line
-                    (plaintext))
-                (unordered_list
-                    (unordered_list_item
-                        (richtext_line
-                            (plaintext))
-                        (richtext_line
-                            (plaintext)))))
-            (unordered_list_item
-                (richtext_line
-                    (plaintext))
-                (richtext_line
-                    (plaintext)))))
+        (node_content
+            (unordered_list
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext)))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (richtext_line
+                        (plaintext))
+                    (unordered_list
+                        (unordered_list_item
+                            (richtext_line
+                                (plaintext))
+                            (richtext_line
+                                (plaintext)))))
+                (unordered_list_item
+                    (richtext_line
+                        (plaintext))
+                    (richtext_line
+                        (plaintext))))))
     (empty_line)
     (richtext_line
         (plaintext))
     (empty_line))
+)

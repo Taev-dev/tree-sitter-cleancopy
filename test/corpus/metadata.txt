@@ -8,6 +8,7 @@ foo_bar: 'some embed type'
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -19,7 +20,7 @@ foo_bar: 'some embed type'
                 (metadata_value
                     (STRING1)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic string1 key, string1 value
@@ -31,6 +32,7 @@ Metadata, generic string1 key, string1 value
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -43,7 +45,7 @@ Metadata, generic string1 key, string1 value
                 (metadata_value
                     (STRING1)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, string2 value
@@ -55,6 +57,7 @@ foo: "bar"
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -66,7 +69,7 @@ foo: "bar"
                 (metadata_value
                     (STRING2)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, multiline string1 value
@@ -80,6 +83,7 @@ baz'
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -92,7 +96,7 @@ baz'
                     (STRING1)
                     (STRING1)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, bool value
@@ -104,6 +108,7 @@ foo: true
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -115,7 +120,7 @@ foo: true
                 (metadata_value
                     (TRUE)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, null value
@@ -127,6 +132,7 @@ foo: null
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -138,7 +144,7 @@ foo: null
                 (metadata_value
                     (NULL)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, __missing__ value
@@ -150,6 +156,7 @@ foo: __missing__
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -161,7 +168,7 @@ foo: __missing__
                 (metadata_value
                     (MISSING)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, integer value
@@ -173,6 +180,7 @@ foo: 123
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -184,7 +192,7 @@ foo: 123
                 (metadata_value
                     (integer)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, decimal value
@@ -196,6 +204,7 @@ foo: 123.456
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -207,7 +216,7 @@ foo: 123.456
                 (metadata_value
                     (decimal)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, mention value
@@ -219,6 +228,7 @@ foo: @joebob
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -230,7 +240,7 @@ foo: @joebob
                 (metadata_value
                     (mention)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, tag value
@@ -242,6 +252,7 @@ foo: #hashtag
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -253,7 +264,7 @@ foo: #hashtag
                 (metadata_value
                     (tag)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, variable value
@@ -265,6 +276,7 @@ foo: %variable
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -276,7 +288,7 @@ foo: %variable
                 (metadata_value
                     (variable)))))
     (empty_line))
-
+)
 
 ==================
 Metadata, generic identifier key, ref value
@@ -288,6 +300,7 @@ foo: &reference
 ---
 
 (document
+    (node_content
     (node
         (node_title
             (node_title_line
@@ -299,3 +312,4 @@ foo: &reference
                 (metadata_value
                     (ref)))))
     (empty_line))
+)

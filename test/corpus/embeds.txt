@@ -8,18 +8,20 @@ __embed__: 'some embed type'
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (node_metadata
-            (node_metadata_declaration_line
-                (node_metadata_key)
-                (metadata_value
-                    (STRING1))))
-        (embedding_line))
-    (empty_line))
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1))))
+            (embedding_content
+                (embedding_line)))
+        (empty_line)))
 
 
 ==================
@@ -33,19 +35,21 @@ __embed__: 'some embed type'
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (node_metadata
-            (node_metadata_declaration_line
-                (node_metadata_key)
-                (metadata_value
-                    (STRING1))))
-        (embedding_line)
-        (embedding_line))
-    (empty_line))
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1))))
+            (embedding_content
+                (embedding_line)
+                (embedding_line)))
+        (empty_line)))
 
 
 ==================
@@ -60,20 +64,22 @@ __embed__: 'some embed type'
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (node_metadata
-            (node_metadata_declaration_line
-                (node_metadata_key)
-                (metadata_value
-                    (STRING1))))
-        (embedding_line)
-        (empty_line)
-        (embedding_line))
-    (empty_line))
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1))))
+            (embedding_content
+                (embedding_line)
+                (empty_line)
+                (embedding_line)))
+        (empty_line)))
 
 
 ==================
@@ -87,19 +93,21 @@ __embed__: 'some embed type'
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (node_metadata
-            (node_metadata_declaration_line
-                (node_metadata_key)
-                (metadata_value
-                    (STRING1))))
-        (embedding_line)
-        (embedding_line))
-    (empty_line))
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1))))
+            (embedding_content
+                (embedding_line)
+                (embedding_line)))
+        (empty_line)))
 
 
 ==================
@@ -112,14 +120,15 @@ __embed__: 'some embed type'
 ---
 
 (document
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
-        (node_metadata
-            (node_metadata_declaration_line
-                (node_metadata_key)
-                (metadata_value
-                    (STRING1)))))
-    (empty_line))
+    (node_content
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1)))))
+        (empty_line)))

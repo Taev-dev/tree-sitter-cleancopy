@@ -23,7 +23,7 @@ module.exports = grammar({
             $._ext_sof,
             optional($.version_comment),
             repeat($.empty_line),
-            field('root_node', prec.left($._node_segments)),
+            field('root_node_content', prec.left($.node_content)),
             $._ext_eof),
         // Sometimes we have situations where some optional stuff results in
         // other nih whitespace being next to the EoL. One example is if you
@@ -36,7 +36,7 @@ module.exports = grammar({
 
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
-        _node_segments: $ => seq(
+        node_content: $ => seq(
             choice(
                 $._annotation_line_incl_ws,
                 $._richtext_line_incl_ws, $._list, field('node', $.node)),
@@ -44,7 +44,7 @@ module.exports = grammar({
                 $.empty_line, $._annotation_line_incl_ws,
                 $._richtext_line_incl_ws, $._list, field('node', $.node)))),
 
-        _embedding_segments: $ => seq(
+        embedding_content: $ => seq(
             $._embedding_line_incl_ws,
             repeat(choice($._embedding_line_incl_ws, $.empty_line))),
 
@@ -59,7 +59,7 @@ module.exports = grammar({
         ordered_list_item: $ => seq(
             $._ext_node_continue,
             $._ext_list_continue,
-            field('index', $._ext_ol_index),
+            field('index', $.ext_ol_index),
             $._ext_ol_marker,
             repeat($._ext_nih_whitespace),
             field('content', $.richtext_line),
@@ -105,9 +105,9 @@ module.exports = grammar({
                 seq(
                     $._ext_node_begin,
                     choice(
-                        field('embed', seq(
-                            $._ext_flag_embed, $._embedding_segments)),
-                        field('content', $._node_segments)),
+                        field('embedding_content', seq(
+                            $._ext_flag_embed, $.embedding_content)),
+                        field('node_content', $.node_content)),
                     $._ext_node_end),
                 seq(
                     $._ext_node_continue,
@@ -214,7 +214,7 @@ module.exports = grammar({
         annotation_line: $ => seq(
             $._ext_annotation_marker,
             repeat($._ext_nih_whitespace),
-            field('line', repeat($._plaintext_char))),
+            optional(field('line', $.plaintext))),
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing
@@ -292,19 +292,19 @@ module.exports = grammar({
 
         mention: $ => seq(
             $._ext_valtype_marker_mention,
-            field('target', choice($._string, $._sugared_string))),
+            choice($._string, $._sugared_string)),
         tag: $ => seq(
             $._ext_valtype_marker_tag,
-            field('target', choice($._string, $._sugared_string))),
+            choice($._string, $._sugared_string)),
         variable: $ => seq(
             $._ext_valtype_marker_variable,
-            field('target', choice($._string, $._sugared_string))),
+            choice($._string, $._sugared_string)),
         ref: $ => seq(
             $._ext_valtype_marker_ref,
-            field('target', choice($._string, $._sugared_string))),
+            choice($._string, $._sugared_string)),
         // Note: these are only valid in brackets, NOT as a normal metadata
         // value!
-        uri: $ => field('target', choice($._string, $._sugared_uri)),
+        uri: $ => choice($._string, $._sugared_uri),
 
         // These are used for @mentions, #tags, etc
         _sugared_string: $ => /[^\s'"\[\]\{\}\(\)<>@#$&;]+/,
@@ -396,7 +396,7 @@ module.exports = grammar({
         $._ext_list_hangar,
         $._ext_list_begin,
         $._ext_list_end,
-        $._ext_ol_index,
+        $.ext_ol_index,
         $._ext_ol_marker,
         $._ext_ul_marker,
         $._ext_valtype_marker_mention,

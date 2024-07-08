@@ -8,13 +8,15 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (annotation_line)
-    (empty_line))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (annotation_line
+            (plaintext))
+        (empty_line))
+)
 
 ==================
 Node-1 first-line annotation w/ trailing emptyline
@@ -27,18 +29,21 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
+                (annotation_line
                     (plaintext))))
-        (annotation_line))
-    (empty_line))
-
+        (empty_line))
+)
 
 ==================
 Node-1 second-line annotation w/ trailing emptyline
@@ -53,22 +58,25 @@ then an annotation line.
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+    (node_content
         (richtext_line
             (plaintext))
-        (annotation_line)
         (richtext_line
-            (plaintext)))
-    (empty_line))
-
+            (plaintext))
+        (node
+            (node_title
+                (node_title_line
+                    (richtext_line
+                        (plaintext))))
+            (node_content
+                (richtext_line
+                    (plaintext))
+                (annotation_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Root in-list (UNOL-1) annotation w/ trailing emptyline
@@ -81,17 +89,19 @@ then...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (unordered_list
-        (unordered_list_item
-            (richtext_line
-                (plaintext))
-            (annotation_line)))
-    (empty_line))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (unordered_list
+            (unordered_list_item
+                (richtext_line
+                    (plaintext))
+                (annotation_line
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Root in-list (UNOL-1) interstitial annotation w/ trailing emptyline
@@ -105,19 +115,21 @@ then...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (unordered_list
-        (unordered_list_item
-            (richtext_line
-                (plaintext))
-            (annotation_line)
-            (richtext_line
-                (plaintext))))
-    (empty_line))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (unordered_list
+            (unordered_list_item
+                (richtext_line
+                    (plaintext))
+                (annotation_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Root in-list (OL-1) annotation w/ trailing emptyline
@@ -130,17 +142,20 @@ then...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (ordered_list
-        (ordered_list_item
-            (richtext_line
-                (plaintext))
-            (annotation_line)))
-    (empty_line))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (ordered_list
+            (ordered_list_item
+                (ext_ol_index)
+                (richtext_line
+                    (plaintext))
+                (annotation_line
+                    (plaintext))))
+        (empty_line))
+)
 
 ==================
 Root after-list (UNOL-1) annotation w/ trailing emptyline
@@ -153,17 +168,19 @@ then...
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (unordered_list
-        (unordered_list_item
-            (richtext_line
-                (plaintext))))
-    (annotation_line)
-    (empty_line))
-
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (unordered_list
+            (unordered_list_item
+                (richtext_line
+                    (plaintext))))
+        (annotation_line
+            (plaintext))
+        (empty_line))
+)
 
 ==================
 Node-2 annotation forcing dedent w/ trailing emptyline
@@ -179,22 +196,27 @@ then some other stuff:
 ---
 
 (document
-    (richtext_line
-        (plaintext))
-    (richtext_line
-        (plaintext))
-    (node
-        (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+    (node_content
+        (richtext_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
         (node
             (node_title
                 (node_title_line
                     (richtext_line
                         (plaintext))))
-            (richtext_line
-                (plaintext)))
-        (empty_line)
-        (annotation_line))
-    (empty_line))
+            (node_content
+                (node
+                    (node_title
+                        (node_title_line
+                            (richtext_line
+                                (plaintext))))
+                    (node_content
+                        (richtext_line
+                            (plaintext))))
+                (empty_line)
+                (annotation_line
+                    (plaintext))))
+        (empty_line))
+)
