@@ -32,7 +32,8 @@ module.exports = grammar({
         _eol: $ => seq(repeat(prec(2, $._ext_trailing_whitespace)), $._ext_eol),
         // Note: _ext_eol is intentional here; we don't want to twice consume
         // optional trailing whitespace
-        empty_line: $ => seq($._ext_empty_line, $._ext_eol),
+        empty_line: $ => field(
+            'empty_line', seq($._ext_empty_line, $._ext_eol)),
 
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
@@ -50,11 +51,13 @@ module.exports = grammar({
 
         _list: $ => seq(
             $._ext_list_begin,
-            choice($.ordered_list, $.unordered_list),
+            choice(
+                field('list_ol', $.ordered_list),
+                field('list_unol', $.unordered_list)),
             $._ext_list_end),
 
-        ordered_list: $ => field('list', repeat1($.ordered_list_item)),
-        unordered_list: $ => field('list', repeat1($.unordered_list_item)),
+        ordered_list: $ => field('list_item', repeat1($.ordered_list_item)),
+        unordered_list: $ => field('list_item', repeat1($.unordered_list_item)),
 
         ordered_list_item: $ => seq(
             $._ext_node_continue,
@@ -62,7 +65,7 @@ module.exports = grammar({
             field('index', $.ext_ol_index),
             $._ext_ol_marker,
             repeat($._ext_nih_whitespace),
-            field('content', $.richtext_line),
+            field('richtext_line', $.richtext_line),
             $._eol,
             repeat(choice(
                 seq(
@@ -70,18 +73,18 @@ module.exports = grammar({
                     $._ext_list_continue,
                     $._ext_list_hangar,
                     choice(
-                        field('content', $.richtext_line),
+                        field('richtext_line', $.richtext_line),
                         field('annotation', $.annotation_line)),
                     $._eol),
                 $._list)),
-            optional(field('content', $.fmt_autoclose))),
+            optional(field('richtext_line', $.fmt_autoclose))),
 
         unordered_list_item: $ => seq(
             $._ext_node_continue,
             $._ext_list_continue,
             $._ext_ul_marker,
             repeat($._ext_nih_whitespace),
-            field('content', $.richtext_line),
+            field('richtext_line', $.richtext_line),
             $._eol,
             repeat(choice(
                 seq(
@@ -89,11 +92,11 @@ module.exports = grammar({
                     $._ext_list_continue,
                     $._ext_list_hangar,
                     choice(
-                        field('content', $.richtext_line),
+                        field('richtext_line', $.richtext_line),
                         field('annotation', $.annotation_line)),
                     $._eol),
                 $._list)),
-            optional(field('content', $.fmt_autoclose))),
+            optional(field('richtext_line', $.fmt_autoclose))),
 
         node: $ => seq(
             field('title', $.node_title),
@@ -115,8 +118,8 @@ module.exports = grammar({
                     $._eol))),
 
         node_title: $ => seq(
-            field('line', $.node_title_line),
-            repeat(choice($.empty_line, field('line', $.node_title_line)))),
+            $._node_title_line,
+            repeat(choice($.empty_line, $._node_title_line))),
 
         // Word to the wise: don't try and enforce only-1-ID-line here.
         // You'll regret it! Do it when converting the CST -> AST.
@@ -131,11 +134,11 @@ module.exports = grammar({
 
         // Note that the node title marker is ambiguous with the node line
         // content
-        node_title_line: $ => seq(
+        _node_title_line: $ => seq(
             $._ext_node_continue,
             $._ext_node_def_symbol,
             repeat($._ext_nih_whitespace),
-            field('content', optional($.richtext_line)),
+            field('richtext_line', optional($.richtext_line)),
             $._eol),
 
         node_metadata_declaration_line: $ => seq(
@@ -160,8 +163,8 @@ module.exports = grammar({
                 field('declaration', $.inline_metadata_declaration)))),
 
         _richtext_line_incl_ws: $ => seq(
-            $._ext_node_continue, field('content', $.richtext_line), $._eol,
-            optional(field('content', $.fmt_autoclose))),
+            $._ext_node_continue, field('richtext_line', $.richtext_line), $._eol,
+            optional(field('richtext_line', $.fmt_autoclose))),
 
         fmt_autoclose: $ => seq(
             $._ext_fmt_autoclose,
@@ -214,7 +217,7 @@ module.exports = grammar({
         annotation_line: $ => seq(
             $._ext_annotation_marker,
             repeat($._ext_nih_whitespace),
-            optional(field('line', $.plaintext))),
+            optional(field('annotation_content', $.plaintext))),
 
         // This is a (semi-deliberate) bug / departure from the spec, in
         // the interests of substantially simplifying parsing (by allowing
@@ -351,15 +354,15 @@ module.exports = grammar({
             field('target', choice($.mention, $.tag, $.variable, $.ref, $.uri)),
             $._ext_fmt_bracket_close_anon_link),
         fmt_bracket_named_link: $ => seq(
-            field('content', $.richtext_line),
+            field('richtext_line', $.richtext_line),
             $._ext_fmt_bracket_delimit_named_link,
             // $.richtext_line,
             field('target', choice($.mention, $.tag, $.variable, $.ref, $.uri)),
             $._ext_fmt_bracket_close_named_link),
         fmt_bracket_metadata: $ => seq(
-            field('content', $.richtext_line),
+            field('richtext_line', $.richtext_line),
             $._ext_fmt_bracket_delimit_metadata,
-            field('metadata', $.inline_metadata),
+            field('inline_metadata', $.inline_metadata),
             $._ext_fmt_bracket_close_metadata)
     },
 
