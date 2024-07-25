@@ -32,8 +32,7 @@ module.exports = grammar({
         _eol: $ => seq(repeat(prec(2, $._ext_trailing_whitespace)), $._ext_eol),
         // Note: _ext_eol is intentional here; we don't want to twice consume
         // optional trailing whitespace
-        empty_line: $ => field(
-            'empty_line', seq($._ext_empty_line, $._ext_eol)),
+        empty_line: $ => seq($._ext_empty_line, $._ext_eol),
 
         version_comment: $ => seq($._LITERAL_VERSION_COMMENT, $._eol),
 
@@ -42,12 +41,12 @@ module.exports = grammar({
                 $._annotation_line_incl_ws,
                 $._richtext_line_incl_ws, $._list, field('node', $.node)),
             repeat(choice(
-                $.empty_line, $._annotation_line_incl_ws,
+                field('empty_line', $.empty_line), $._annotation_line_incl_ws,
                 $._richtext_line_incl_ws, $._list, field('node', $.node)))),
 
         embedding_content: $ => seq(
             $._embedding_line_incl_ws,
-            repeat(choice($._embedding_line_incl_ws, $.empty_line))),
+            repeat(choice($._embedding_line_incl_ws, field('empty_line', $.empty_line)))),
 
         _list: $ => seq(
             $._ext_list_begin,
@@ -119,7 +118,7 @@ module.exports = grammar({
 
         node_title: $ => seq(
             $._node_title_line,
-            repeat(choice($.empty_line, $._node_title_line))),
+            repeat(choice(field('empty_line', $.empty_line), $._node_title_line))),
 
         // Word to the wise: don't try and enforce only-1-ID-line here.
         // You'll regret it! Do it when converting the CST -> AST.
@@ -128,7 +127,7 @@ module.exports = grammar({
                 $._annotation_line_incl_ws,
                 field('declaration', $.node_metadata_declaration_line)),
             repeat(choice(
-                $.empty_line,
+                field('empty_line', $.empty_line),
                 field('declaration', $.node_metadata_declaration_line),
                 $._annotation_line_incl_ws))),
 

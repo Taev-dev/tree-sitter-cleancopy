@@ -11,9 +11,8 @@ __embed__: 'some embed type'
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_metadata
                 (node_metadata_declaration_line
                     (node_metadata_key)
@@ -38,9 +37,8 @@ __embed__: 'some embed type'
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_metadata
                 (node_metadata_declaration_line
                     (node_metadata_key)
@@ -67,9 +65,8 @@ __embed__: 'some embed type'
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_metadata
                 (node_metadata_declaration_line
                     (node_metadata_key)
@@ -96,9 +93,8 @@ __embed__: 'some embed type'
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_metadata
                 (node_metadata_declaration_line
                     (node_metadata_key)
@@ -123,9 +119,8 @@ __embed__: 'some embed type'
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_metadata
                 (node_metadata_declaration_line
                     (node_metadata_key)

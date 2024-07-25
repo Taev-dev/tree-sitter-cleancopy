@@ -36,9 +36,8 @@ then an annotation line.
             (plaintext))
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (annotation_line
                     (plaintext))))
@@ -65,9 +64,8 @@ then an annotation line.
             (plaintext))
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))
@@ -203,15 +201,13 @@ then some other stuff:
             (plaintext))
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (node
                     (node_title
-                        (node_title_line
-                            (richtext_line
-                                (plaintext))))
+                        (richtext_line
+                            (plaintext)))
                     (node_content
                         (richtext_line
                             (plaintext))))

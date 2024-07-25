@@ -470,9 +470,8 @@ Here we have a single content row followed by:
         (plaintext))
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+            (richtext_line
+                (plaintext)))
         (node_content
             (unordered_list
                 (unordered_list_item
@@ -506,9 +505,8 @@ Here we have a single content row followed by:
         (plaintext))
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+            (richtext_line
+                (plaintext)))
         (node_content
             (unordered_list
                 (unordered_list_item
@@ -544,9 +542,8 @@ Here we have a single content row followed by:
         (plaintext))
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+            (richtext_line
+                (plaintext)))
         (node_content
             (unordered_list
                 (unordered_list_item
@@ -581,9 +578,8 @@ Here we have a single content row followed by:
         (plaintext))
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+            (richtext_line
+                (plaintext)))
         (node_content
             (unordered_list
                 (unordered_list_item
@@ -626,9 +622,8 @@ tada!
         (plaintext))
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext))))
+            (richtext_line
+                (plaintext)))
         (node_content
             (unordered_list
                 (unordered_list_item

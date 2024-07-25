@@ -10,9 +10,8 @@ Single toplevel node, immediate, title-1, no metadata
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -32,12 +31,10 @@ Single toplevel node, immediate, title-2, no metadata
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext)))
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -61,9 +58,8 @@ Preamble content
         (empty_line)
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -85,9 +81,8 @@ Trailing content
             (plaintext))
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -111,8 +106,7 @@ Preamble content
             (plaintext))
         (empty_line)
         (node
-            (node_title
-                (node_title_line))
+            (node_title)
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -136,9 +130,8 @@ Preamble content
     (empty_line)
     (node
         (node_title
-            (node_title_line
-                (richtext_line
-                    (plaintext)))))
+            (richtext_line
+                (plaintext))))
     (empty_line))
 )
 
@@ -158,8 +151,7 @@ Preamble content
         (plaintext))
     (empty_line)
     (node
-        (node_title
-            (node_title_line)))
+        (node_title))
     (empty_line))
 )
 
@@ -187,27 +179,24 @@ Root trailing content
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))
                 (empty_line)
                 (node
                     (node_title
-                        (node_title_line
-                            (richtext_line
-                                (plaintext))))
+                        (richtext_line
+                            (plaintext)))
                     (node_content
                         (richtext_line
                             (plaintext))
                         (empty_line)
                         (node
                             (node_title
-                                (node_title_line
-                                    (richtext_line
-                                        (plaintext))))
+                                (richtext_line
+                                    (plaintext)))
                             (node_content
                                 (richtext_line
                                     (plaintext))))
@@ -241,27 +230,24 @@ Nested nodes, immediate, title-1, no metadata, immediate exit
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))
                 (empty_line)
                 (node
                     (node_title
-                        (node_title_line
-                            (richtext_line
-                                (plaintext))))
+                        (richtext_line
+                            (plaintext)))
                     (node_content
                         (richtext_line
                             (plaintext))
                         (empty_line)
                         (node
                             (node_title
-                                (node_title_line
-                                    (richtext_line
-                                        (plaintext))))
+                                (richtext_line
+                                    (plaintext)))
                             (node_content
                                 (richtext_line
                                     (plaintext))))))))
@@ -280,9 +266,8 @@ Single toplevel node, fmt-unwind, trailing empty line
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext)
@@ -304,9 +289,8 @@ Single toplevel node, fmt-unwind, no trailing empty line
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext)
@@ -335,9 +319,8 @@ Preamble content with **fmt-strong
             (ext_fmt_strong))
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext))))
+                (richtext_line
+                    (plaintext)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -356,11 +339,10 @@ Single toplevel node, fmt-em in title
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (ext_fmt_emphasis)
-                        (plaintext)
-                        (ext_fmt_emphasis))))
+                (richtext_line
+                    (ext_fmt_emphasis)
+                    (plaintext)
+                    (ext_fmt_emphasis)))
             (node_content
                 (richtext_line
                     (plaintext))))
@@ -379,13 +361,12 @@ Single toplevel node, link in title
     (node_content
         (node
             (node_title
-                (node_title_line
-                    (richtext_line
-                        (plaintext)
-                        (fmt_bracket_named_link
-                            (richtext_line
-                                (plaintext))
-                            (tag)))))
+                (richtext_line
+                    (plaintext)
+                    (fmt_bracket_named_link
+                        (richtext_line
+                            (plaintext))
+                        (tag))))
             (node_content
                 (richtext_line
                     (plaintext))))
