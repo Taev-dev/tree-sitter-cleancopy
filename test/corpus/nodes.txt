@@ -349,6 +349,7 @@ Single toplevel node, fmt-em in title
         (empty_line))
 )
 
+
 ==================
 Single toplevel node, link in title
 ==================
@@ -372,3 +373,223 @@ Single toplevel node, link in title
                     (plaintext))))
         (empty_line))
 )
+
+
+==================
+Toplevel node with immediate nested node
+==================
+> Some nodes
+    > Jump straight into nested nodes
+        Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (node
+                    (node_title
+                        (richtext_line
+                            (plaintext)))
+                    (node_content
+                        (richtext_line
+                            (plaintext))))))
+        (empty_line)))
+
+
+==================
+Toplevel node with immediate nested list-unol
+==================
+> Some nodes
+    ++ Jump straight into nested lists
+    Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (unordered_list
+                    (unordered_list_item
+                        (richtext_line
+                            (plaintext))))
+                (richtext_line
+                    (plaintext))))
+        (empty_line)))
+
+
+==================
+Toplevel node with immediate nested list-ol
+==================
+> Some nodes
+    1.. Jump straight into nested lists
+    Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (ordered_list
+                    (ordered_list_item
+                        (ext_ol_index)
+                        (richtext_line
+                            (plaintext))))
+                (richtext_line
+                    (plaintext))))
+        (empty_line)))
+
+
+==================
+Toplevel node with immediate nested annotation
+==================
+> Some nodes
+    ## Have an immediate annotation
+    Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (annotation_line
+                    (plaintext))
+                (richtext_line
+                    (plaintext))))
+        (empty_line)))
+
+
+==================
+Toplevel node followed by immediate node
+==================
+> Some nodes
+    have content, but then
+
+> Jump straight into the next node
+    Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line)
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line)))
+
+
+==================
+Toplevel node followed by immediate list-unol
+==================
+> Some nodes
+    have content, but then
+
+++ have lists
+Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line)
+        (unordered_list
+            (unordered_list_item
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext))
+        (empty_line)))
+
+
+==================
+Toplevel node followed by immediate list-ol
+==================
+> Some nodes
+    have content, but then
+
+1.. have lists
+Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line)
+        (ordered_list
+            (ordered_list_item
+                (ext_ol_index)
+                (richtext_line
+                    (plaintext))))
+        (richtext_line
+            (plaintext))
+        (empty_line)))
+
+
+==================
+Toplevel node followed by immediate annotation
+==================
+> Some nodes
+    have content, but then
+
+## have annotations
+Without any fanfare
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_content
+                (richtext_line
+                    (plaintext))))
+        (empty_line)
+        (annotation_line
+            (plaintext))
+        (richtext_line
+            (plaintext))
+        (empty_line)))
