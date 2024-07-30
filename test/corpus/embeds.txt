@@ -51,6 +51,31 @@ __embed__: 'some embed type'
 
 
 ==================
+Single toplevel node, immediate, title-1, no metadata, embed-1 short
+==================
+> Node title
+__embed__: 'some embed type'
+    !!
+
+---
+
+(document
+    (node_content
+        (node
+            (node_title
+                (richtext_line
+                    (plaintext)))
+            (node_metadata
+                (node_metadata_declaration_line
+                    (node_metadata_key)
+                    (metadata_value
+                        (STRING1))))
+            (embedding_content
+                (embedding_line)))
+        (empty_line)))
+
+
+==================
 Single toplevel node, immediate, title-1, no metadata, embed-2, inter empty lines
 ==================
 > Node title
